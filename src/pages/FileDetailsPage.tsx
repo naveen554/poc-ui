@@ -4,7 +4,6 @@ import {
   ArrowLeftIcon,
   FileTextIcon,
   RefreshCwIcon,
-  DownloadIcon,
   EyeIcon } from
 'lucide-react';
 import { FileDetail } from '../types';
@@ -12,7 +11,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { MetricsBar } from '../components/details/MetricsBar';
 import { ExtractedInformation } from '../components/details/ExtractedInformation';
 import { PerformanceGuarantees } from '../components/details/PerformanceGuarantees';
-import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, PerformanceGuarantee } from '../services/api';
+import { getContractDetails, getContractPipelineStatus, getPGsByContract, PerformanceGuarantee } from '../services/api';
 import { mapContractToFileDetail } from '../services/mappers';
 import { Tooltip } from '../components/ui/Tooltip';
 import { Dialog } from '../components/ui/Dialog';
@@ -44,8 +43,7 @@ export function FileDetailsPage() {
       const contract = await getContractDetails(fileId);
       const mapped = mapContractToFileDetail(contract);
       
-      const url = constructS3DocumentUrl(contract.s3_bucket, contract.s3_key);
-      setDocumentUrl(url);
+      setDocumentUrl(contract.document_url);
 
       try {
         const pipelineStatus = await getContractPipelineStatus(fileId);
@@ -184,29 +182,18 @@ export function FileDetailsPage() {
         )
       )}
 
-      <Dialog open={showPreview} onClose={() => setShowPreview(false)} title="Document Preview" size="80%">
+      <Dialog open={showPreview} onClose={() => setShowPreview(false)} title="Contract" size="80%">
         <div className="bg-neutral-900 p-6 relative" style={{ minHeight: '80vh' }}>
-          {documentUrl && (
-            <div className="absolute top-4 right-4 z-10">
-              <a
-                href={documentUrl}
-                download
-                className="flex items-center gap-1.5 rounded bg-white px-3 py-1.5 text-[13px] font-semibold text-navy-700 shadow-lg transition-colors duration-150 ease-out hover:bg-gray-100">
-                <DownloadIcon className="h-4 w-4" />
-                Download
-              </a>
-            </div>
-          )}
           {documentUrl ? (
             <iframe
-              src={documentUrl}
+              src={`${documentUrl}#toolbar=0`}
               title={`Preview of ${detail.fileName}`}
               className="mx-auto w-full h-full rounded bg-white shadow-lg"
               style={{ minHeight: '75vh' }}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
-              <p className="text-sm text-gray-400">Document preview not available</p>
+              <p className="text-sm text-gray-400">Contract preview not available</p>
             </div>
           )}
         </div>

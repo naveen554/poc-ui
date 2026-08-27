@@ -92,6 +92,7 @@ export interface ContractDetails {
   vb_premium: string | null;
   implementation_amount_at_risk: string | null;
   extraction_exceptions: ExtractionException[];
+  document_url: string;
 }
 
 export async function uploadContract(
