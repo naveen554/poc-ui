@@ -12,9 +12,9 @@ export function TopNav() {
       <div className="mx-auto flex h-12 w-full max-w-[1400px] items-center px-4">
         <div className="flex items-center gap-2">
           <img
-            src="/nyl-logo-rebrand.svg"
+            src="/NylLogo.svg"
             alt="New York Life"
-            className="h-7 w-7" />
+            className="h-10 w-10" />
 
           <span className="text-sm font-semibold text-navy-800">
             NYL <span className="font-normal text-gray-400">-</span> QCoE PG

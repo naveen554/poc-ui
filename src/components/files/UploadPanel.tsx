@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { UploadCloudIcon, AlertCircleIcon } from 'lucide-react';
 import { Panel } from '../ui/Panel';
 
-export function UploadPanel({ onFilesSelected }: {onFilesSelected: (names: string[]) => void;}) {
+export function UploadPanel({ onFilesSelected }: {onFilesSelected: (files: File[]) => void;}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +14,7 @@ export function UploadPanel({ onFilesSelected }: {onFilesSelected: (names: strin
     const rejected = all.length - pdfs.length;
     setError(rejected > 0 ? `Only PDF files are supported. ${rejected} file${rejected > 1 ? 's were' : ' was'} skipped.` : null);
     if (pdfs.length === 0) return;
-    onFilesSelected(pdfs.map((f) => f.name));
+    onFilesSelected(pdfs);
   };
 
   return (

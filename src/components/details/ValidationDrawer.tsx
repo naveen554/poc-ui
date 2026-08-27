@@ -1,7 +1,7 @@
-import React from 'react';
 import { CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { ValidationResult } from '../../types';
 import { Drawer } from '../ui/Drawer';
+import { Tooltip } from '../ui/Tooltip';
 
 interface ValidationDrawerProps {
   open: boolean;
@@ -13,7 +13,9 @@ function Meta({ label, value }: {label: string;value: string;}) {
   return (
     <div className="mb-2">
       <p className="text-2xs uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="text-[12.5px] text-gray-800">{value}</p>
+      <Tooltip content={value} className="block overflow-hidden">
+        <p className="text-[12.5px] text-gray-800 truncate">{value}</p>
+      </Tooltip>
     </div>);
 
 }
@@ -54,11 +56,15 @@ export function ValidationDrawer({ open, onClose, results }: ValidationDrawerPro
                 
                 <div className="flex gap-2">
                   <dt className="w-16 shrink-0 text-[11.5px] text-gray-500">Expected:</dt>
-                  <dd className="text-[11.5px] font-medium text-gray-800">{result.expected}</dd>
+                  <Tooltip content={result.expected} className="block overflow-hidden flex-1">
+                    <dd className="text-[11.5px] font-medium text-gray-800 truncate">{result.expected}</dd>
+                  </Tooltip>
                 </div>
                 <div className="flex gap-2">
                   <dt className="w-16 shrink-0 text-[11.5px] text-gray-500">Actual:</dt>
-                  <dd className="text-[11.5px] font-medium text-navy-700">{result.actual}</dd>
+                  <Tooltip content={result.actual} className="block overflow-hidden flex-1">
+                    <dd className="text-[11.5px] font-medium text-navy-700 truncate">{result.actual}</dd>
+                  </Tooltip>
                 </div>
                 <div className="flex gap-2">
                   <dt className="w-16 shrink-0 text-[11.5px] text-gray-500">Match:</dt>
