@@ -1,13 +1,13 @@
-import React from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { TopNav } from './components/TopNav';
-import { FilesPage } from './pages/FilesPage';
-import { FileDetailsPage } from './pages/FileDetailsPage';
-import { ReportsPage } from './pages/ReportsPage';
+import React from "react";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { TopNav } from "./components/TopNav";
+import { FilesPage } from "./pages/FilesPage";
+import { FileDetailsPage } from "./pages/FileDetailsPage";
+import { ReportsPage } from "./pages/ReportsPage";
 
 export function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="flex min-h-full w-full flex-col bg-canvas">
         <TopNav />
         <main className="flex-1">
@@ -20,6 +20,6 @@ export function App() {
           </Routes>
         </main>
       </div>
-    </BrowserRouter>);
-
+    </HashRouter>
+  );
 }
