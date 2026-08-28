@@ -1,7 +1,7 @@
 import { useEffect, useState, Fragment } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, XCircleIcon, AlertCircleIcon, HistoryIcon, InfoIcon, EyeIcon, RefreshCwIcon, DownloadIcon } from 'lucide-react';
-import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, getPGDetail, getPGHistory, PerformanceGuarantee, PGHistoryItem, PGValidation, ContractValidation, ExtractionException } from '../services/api';
+import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, getPGDetail, getPGHistory, PerformanceGuarantee, PGHistoryItem, PGValidation, ContractValidation } from '../services/api';
 import { ContractDetails } from '../services/api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Loader } from '../components/ui/Loader';
@@ -391,7 +391,7 @@ export function ContractDetailsPage() {
             </div>
           )}
 
-          {contract.extraction_exceptions && contract.extraction_exceptions.length > 0 && (
+          {/* {contract.extraction_exceptions && contract.extraction_exceptions.length > 0 && (
             <div className="rounded-md border border-gray-200 bg-white shadow-sm">
               <div className="flex h-9 items-center bg-navy-700 px-3 text-white">
                 <h2 className="text-[13px] font-semibold">Extraction Exceptions ({contract.extraction_exceptions.length})</h2>
@@ -402,7 +402,7 @@ export function ContractDetailsPage() {
                 ))}
               </div>
             </div>
-          )}
+          )} */}
         </>
       )}
 
@@ -894,28 +894,28 @@ function InfoField({ label, value }: { label: string; value: string | null | und
   );
 }
 
-function ExceptionCard({ exception }: { exception: ExtractionException }) {
-  const typeColor =
-    exception.exception_type === 'NATURAL_DISASTER' ? 'bg-red-600' :
-    exception.exception_type === 'REGULATORY_RESTRICTION' ? 'bg-purple-600' :
-    exception.exception_type === 'THIRD_PARTY_DELAY' ? 'bg-blue-600' :
-    exception.exception_type === 'CLIENT_DELAY' ? 'bg-amber-500' :
-    exception.exception_type === 'EXTERNAL_DELAY' ? 'bg-orange-500' :
-    'bg-gray-600';
+// function ExceptionCard({ exception }: { exception: ExtractionException }) {
+//   const typeColor =
+//     exception.exception_type === 'NATURAL_DISASTER' ? 'bg-red-600' :
+//     exception.exception_type === 'REGULATORY_RESTRICTION' ? 'bg-purple-600' :
+//     exception.exception_type === 'THIRD_PARTY_DELAY' ? 'bg-blue-600' :
+//     exception.exception_type === 'CLIENT_DELAY' ? 'bg-amber-500' :
+//     exception.exception_type === 'EXTERNAL_DELAY' ? 'bg-orange-500' :
+//     'bg-gray-600';
 
-  return (
-    <div className="rounded border border-gray-200 bg-white p-3">
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${typeColor}`}>
-          {exception.exception_type.replace(/_/g, ' ')}
-        </span>
-        <span className="text-[11px] font-mono font-semibold text-gray-700 bg-gray-100 rounded px-1.5 py-0.5">
-          {exception.affected_field}
-        </span>
-      </div>
-      <div className="text-[12px] text-gray-800 break-words leading-relaxed">
-        {exception.description}
-      </div>
-    </div>
-  );
-}
+//   return (
+//     <div className="rounded border border-gray-200 bg-white p-3">
+//       <div className="flex flex-wrap items-center gap-2 mb-2">
+//         <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${typeColor}`}>
+//           {exception.exception_type.replace(/_/g, ' ')}
+//         </span>
+//         <span className="text-[11px] font-mono font-semibold text-gray-700 bg-gray-100 rounded px-1.5 py-0.5">
+//           {exception.affected_field}
+//         </span>
+//       </div>
+//       <div className="text-[12px] text-gray-800 break-words leading-relaxed">
+//         {exception.description}
+//       </div>
+//     </div>
+//   );
+// }
