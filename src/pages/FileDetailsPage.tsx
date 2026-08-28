@@ -8,7 +8,7 @@ import {
 'lucide-react';
 import { FileDetail } from '../types';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { MetricsBar } from '../components/details/MetricsBar';
+// import { MetricsBar } from '../components/details/MetricsBar';
 import { ExtractedInformation } from '../components/details/ExtractedInformation';
 import { PerformanceGuarantees } from '../components/details/PerformanceGuarantees';
 import { getContractDetails, getContractPipelineStatus, getPGsByContract, PerformanceGuarantee } from '../services/api';
@@ -158,7 +158,7 @@ export function FileDetailsPage() {
         </div>
       </div>
 
-      <MetricsBar detail={detail} />
+      {/* <MetricsBar detail={detail} /> */}
 
       <ExtractedInformation fields={detail.extractedFields} />
 
