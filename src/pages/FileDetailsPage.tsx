@@ -42,6 +42,8 @@ export function FileDetailsPage() {
       setError(null);
       const contract = await getContractDetails(fileId);
       const mapped = mapContractToFileDetail(contract);
+
+      console.log(contract.document_url, 'contract.document_url')
       
       setDocumentUrl(contract.document_url);
 
@@ -123,7 +125,7 @@ export function FileDetailsPage() {
           <ArrowLeftIcon className="h-4 w-4" />
         </button>
         <FileTextIcon className="h-4 w-4 text-red-500" aria-hidden="true" />
-        <Tooltip content={detail.fileName} className="block overflow-hidden max-w-[400px]">
+        <Tooltip content={detail.fileName} maxWidth="600px" className="block overflow-hidden max-w-[400px]">
           <h1 className="text-[15px] font-semibold text-navy-800 truncate">{detail.fileName}</h1>
         </Tooltip>
         <StatusBadge status={detail.status} />

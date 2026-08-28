@@ -63,7 +63,7 @@ export function ExtractedInformation({ fields }: { fields: ExtractedField[] }) {
 
   return (
     <Panel
-      title="Extracted Information"
+      title="Contract Information"
       action={
       <div className="flex items-center gap-2">
           <span className="text-[12px] font-medium text-white/90">Accuracy</span>
