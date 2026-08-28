@@ -12,6 +12,7 @@ export interface ContractValidation {
   status: 'PASS' | 'FAIL' | 'WARN' | 'INFO' | 'SKIP';
   message: string;
   rule_id: string;
+  rule_definition?: PGRuleDefinition;
 }
 
 export interface ExtractionMetadata {
@@ -52,6 +53,7 @@ export interface ContractDetails {
   overall_status: string;
   s3_key: string;
   s3_bucket: string;
+  document_url: string;
   pipeline_execution_arn: string | null;
   extraction_metadata: ExtractionMetadata;
   contract_validations: ContractValidation[];
@@ -92,7 +94,6 @@ export interface ContractDetails {
   vb_premium: string | null;
   implementation_amount_at_risk: string | null;
   extraction_exceptions: ExtractionException[];
-  document_url: string;
 }
 
 export async function uploadContract(
@@ -215,10 +216,28 @@ export function constructS3DocumentUrl(
   return `https://${s3Bucket}.s3.us-east-2.amazonaws.com/${s3Key}`;
 }
 
+export interface PGRuleDefinition {
+  id: string;
+  name: string;
+  enabled: boolean;
+  message_template?: string;
+  pass_when?: string;
+  fail_when?: string;
+  warn_when?: string;
+  info_when?: string;
+  valid_range_lower?: number;
+  valid_range_upper?: number;
+  duplicate_key_fields?: string[];
+  standard_renewal_days?: number;
+  custom_renewal_examples?: number[];
+  [key: string]: any;
+}
+
 export interface PGValidation {
   status: 'PASS' | 'FAIL' | 'WARN' | 'INFO' | 'SKIP';
   message: string;
   rule_id: string;
+  rule_definition?: PGRuleDefinition;
 }
 
 export interface PerformanceGuarantee {

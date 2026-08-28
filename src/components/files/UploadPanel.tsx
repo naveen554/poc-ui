@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { UploadCloudIcon, AlertCircleIcon } from 'lucide-react';
 import { Panel } from '../ui/Panel';
 
@@ -18,7 +18,7 @@ export function UploadPanel({ onFilesSelected }: {onFilesSelected: (files: File[
   };
 
   return (
-    <Panel title="Upload Files" bodyClassName="p-3">
+    <Panel title="Upload Contract" bodyClassName="p-3">
       <div
         onDragOver={(e) => {
           e.preventDefault();

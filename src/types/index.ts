@@ -2,13 +2,14 @@ export type FileStatus = 'Completed' | 'Failed' | 'Processing' | 'Processed';
 
 export interface UploadedFile {
   id: string;
-  name: string;
-  documentType: string;
-  uploadedOn: string;
-  policyNo: string[];
-  slaTarget: string;
-  penaltyAllocation: string;
+  clientName: string;
+  policies: string[];
+  pgsTotal: number;
+  pgsPending: number;
   status: FileStatus;
+  uploadedOn: string;
+  documentType?: string;
+  penaltyAllocation?: string;
   versions?: UploadedFile[];
   versionLabel?: string;
 }

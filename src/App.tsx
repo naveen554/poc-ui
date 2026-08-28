@@ -1,9 +1,8 @@
-import React from "react";
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
-import { TopNav } from "./components/TopNav";
-import { FilesPage } from "./pages/FilesPage";
-import { FileDetailsPage } from "./pages/FileDetailsPage";
-import { ReportsPage } from "./pages/ReportsPage";
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { TopNav } from './components/TopNav';
+import { FilesPage } from './pages/FilesPage';
+import { ContractDetailsPage } from './pages/ContractDetailsPage';
+import { ReportsPage } from './pages/ReportsPage';
 
 export function App() {
   return (
@@ -12,14 +11,16 @@ export function App() {
         <TopNav />
         <main className="flex-1">
           <Routes>
-            <Route path="/" element={<Navigate to="/files" replace />} />
-            <Route path="/files" element={<FilesPage />} />
-            <Route path="/files/:fileId" element={<FileDetailsPage />} />
+            <Route path="/" element={<Navigate to="/contracts" replace />} />
+            <Route path="/contracts" element={<FilesPage />} />
+            <Route path="/contracts/:fileId" element={<ContractDetailsPage />} />
+            <Route path="/files" element={<Navigate to="/contracts" replace />} />
+            <Route path="/files/:fileId" element={<Navigate to="/contracts" replace />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="*" element={<Navigate to="/files" replace />} />
+            <Route path="*" element={<Navigate to="/contracts" replace />} />
           </Routes>
         </main>
       </div>
-    </HashRouter>
-  );
+    </HashRouter>);
+
 }

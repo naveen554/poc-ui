@@ -1,12 +1,14 @@
-import React from 'react';
 import { NavLink } from 'react-router-dom';
-
-const links = [
-{ to: '/files', label: 'Files' },
-{ to: '/reports', label: 'Reports' }];
-
+import { getFeatureFlag, FeatureFlagKeys } from '../config/launchdarkly';
 
 export function TopNav() {
+  const showReports = getFeatureFlag(FeatureFlagKeys.REPORTS);
+
+  const links = [
+    { to: '/contracts', label: 'Contracts' },
+    ...(showReports ? [{ to: '/reports', label: 'Reports' }] : []),
+  ];
+
   return (
     <header className="sticky top-0 z-30 w-full border-b border-gray-200 bg-white">
       <div className="mx-auto flex h-12 w-full max-w-[1400px] items-center px-4">

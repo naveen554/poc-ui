@@ -72,7 +72,7 @@ export function Tooltip({ content, children, maxWidth = '300px', className = 'in
               {displayContent.map((item, index) => (
                 <span
                   key={index}
-                  className="text-[11px] text-white font-medium whitespace-nowrap"
+                  className="text-[11px] text-white font-medium whitespace-normal break-words"
                 >
                   {item}
                 </span>

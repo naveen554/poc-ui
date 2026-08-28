@@ -9,20 +9,21 @@ import { mapContractToUploadedFile } from '../services/mappers';
 import { Toast, ToastType } from '../components/ui/Toast';
 import { Dialog } from '../components/ui/Dialog';
 
-type TabKey = 'all' | 'progress' | 'completed' | 'failed';
+type TabKey = 'all' | 'pendingReview' | 'approved' | 'failed';
 
 const tabs: {key: TabKey;label: string;}[] = [
 { key: 'all', label: 'All' },
-{ key: 'progress', label: 'In Progress' },
-{ key: 'completed', label: 'Completed' },
+{ key: 'pendingReview', label: 'Pending Review' },
+{ key: 'approved', label: 'Approved' },
 { key: 'failed', label: 'Failed' }];
 
 
 function matchesTab(file: UploadedFile, tab: TabKey) {
   if (tab === 'all') return true;
-  if (tab === 'completed') return file.status === 'Completed';
+  if (tab === 'pendingReview') return file.status === 'Processing' || file.status === 'Processed';
+  if (tab === 'approved') return file.status === 'Completed';
   if (tab === 'failed') return file.status === 'Failed';
-  return file.status === 'Processing' || file.status === 'Processed';
+  return false;
 }
 
 export function FilesPage() {
@@ -78,24 +79,21 @@ export function FilesPage() {
   };
 
   const counts = useMemo(() => {
-    const flat = files.flatMap((f) => [f, ...(f.versions ?? [])]);
     return {
-      all: flat.length,
-      progress: flat.filter((f) => f.status === 'Processing' || f.status === 'Processed').length,
-      completed: flat.filter((f) => f.status === 'Completed').length,
-      failed: flat.filter((f) => f.status === 'Failed').length
+      all: files.length,
+      pendingReview: files.filter((f) => f.status === 'Processing' || f.status === 'Processed').length,
+      approved: files.filter((f) => f.status === 'Completed').length,
+      failed: files.filter((f) => f.status === 'Failed').length
     };
   }, [files]);
 
   const visibleFiles = useMemo(() => {
     const q = query.trim().toLowerCase();
     return files.filter((file) => {
-      const inTab = matchesTab(file, tab) || (file.versions ?? []).some((v) => matchesTab(v, tab));
+      const inTab = matchesTab(file, tab);
       if (!inTab) return false;
       if (!q) return true;
-      const haystack = [file.name, file.documentType, ...file.policyNo, file.slaTarget, file.penaltyAllocation, file.status].
-      join(' ').
-      toLowerCase();
+      const haystack = [file.clientName, ...file.policies, file.status].join(' ').toLowerCase();
       return haystack.includes(q);
     });
   }, [files, tab, query]);
@@ -112,16 +110,15 @@ export function FilesPage() {
       minute: '2-digit'
     });
     
-    const placeholders: UploadedFile[] = uploadFiles.map((file, i) => ({
-      id: `uploading-${now.getTime()}-${i}`,
-      name: file.name,
-      documentType: 'Uploading...',
-      uploadedOn: stamp,
-      policyNo: ['—'],
-      slaTarget: '—',
-      penaltyAllocation: '—',
-      status: 'Processing' as const
-    }));
+      const placeholders: UploadedFile[] = uploadFiles.map((file, i) => ({
+        id: `uploading-${now.getTime()}-${i}`,
+        clientName: file.name.replace('.pdf', '').replace(/_/g, ' '),
+        policies: ['—'],
+        pgsTotal: 0,
+        pgsPending: 0,
+        uploadedOn: stamp,
+        status: 'Processing' as const
+      }));
     
     setFiles((prev) => [...placeholders, ...prev]);
 
@@ -139,12 +136,11 @@ export function FilesPage() {
             f.id === placeholderId
               ? {
                   id: response.contractId,
-                  name: file.name,
-                  documentType: 'Processing',
+                  clientName: clientHint,
+                  policies: ['—'],
+                  pgsTotal: 0,
+                  pgsPending: 0,
                   uploadedOn: stamp,
-                  policyNo: ['—'],
-                  slaTarget: '—',
-                  penaltyAllocation: '—',
                   status: 'Processing' as const
                 }
               : f
@@ -159,7 +155,7 @@ export function FilesPage() {
         setFiles((prev) => 
           prev.map((f) => 
             f.id === placeholderId
-              ? { ...f, status: 'Failed' as const, documentType: 'Upload Failed' }
+              ? { ...f, status: 'Failed' as const, clientName: `${clientHint} (Upload Failed)` }
               : f
           )
         );
@@ -216,20 +212,41 @@ export function FilesPage() {
 
       <section className="overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-3 py-2.5">
-          <label className="relative w-[240px]">
-            <span className="sr-only">Search documents</span>
+          <label className="relative w-[300px]">
+            <span className="sr-only">Search contracts</span>
             <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search docs..."
+              placeholder="Search by client name or policy number..."
               className="h-8 w-full rounded border border-gray-300 pl-8 pr-2 text-[12.5px] text-gray-700 outline-none transition-colors duration-150 ease-out placeholder:text-gray-400 focus:border-navy-700" />
             
           </label>
 
-          <div className="ml-auto flex items-center gap-1" role="tablist" aria-label="Filter files by status">
+          <div className="ml-auto flex items-center gap-2" role="tablist" aria-label="Filter contracts by status">
             {tabs.map((t) => {
               const active = tab === t.key;
+              const count = counts[t.key];
+              
+              let colorClasses = '';
+              if (t.key === 'all') {
+                colorClasses = active 
+                  ? 'bg-navy-700 text-white border-navy-700'
+                  : 'bg-navy-50 text-navy-700 border-navy-200 hover:bg-navy-100';
+              } else if (t.key === 'pendingReview') {
+                colorClasses = active
+                  ? 'bg-amber-500 text-white border-amber-500'
+                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100';
+              } else if (t.key === 'approved') {
+                colorClasses = active
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100';
+              } else if (t.key === 'failed') {
+                colorClasses = active
+                  ? 'bg-red-600 text-white border-red-600'
+                  : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
+              }
+              
               return (
                 <button
                   key={t.key}
@@ -237,16 +254,10 @@ export function FilesPage() {
                   aria-selected={active}
                   type="button"
                   onClick={() => setTab(t.key)}
-                  className={[
-                  'rounded px-2.5 py-1.5 text-[12px] transition-colors duration-150 ease-out',
-                  active ?
-                  'bg-navy-100 font-semibold text-navy-700 underline decoration-navy-700 decoration-2 underline-offset-4' :
-                  'text-gray-500 hover:bg-gray-100 hover:text-navy-700'].
-                  join(' ')}>
-                  
-                  {t.label} ({counts[t.key]})
-                </button>);
-
+                  className={`rounded border px-3 py-1.5 text-[13px] font-medium transition-all duration-150 ease-out ${colorClasses}`}>
+                  {t.label} <span className={active ? 'font-bold' : 'font-semibold'}>({count})</span>
+                </button>
+              );
             })}
             <button
               type="button"
@@ -274,8 +285,8 @@ export function FilesPage() {
           <FilesTable
             files={visibleFiles}
             onView={(file) =>
-            navigate(`/files/${file.id}`, {
-              state: { name: file.name, status: file.status }
+            navigate(`/contracts/${file.id}`, {
+              state: { clientName: file.clientName, status: file.status }
             })
             }
             onDelete={handleDelete} />
@@ -296,12 +307,12 @@ export function FilesPage() {
           setDeleteDialogOpen(false);
           setFileToDelete(null);
         }} 
-        title="Delete" 
+        title="Delete Contract" 
         size="md"
       >
         <div className="px-6 py-4">
           <p className="text-sm text-gray-700 mb-6">
-            Are you sure you want to delete <span className="font-semibold text-gray-900">"{fileToDelete?.name}"</span>?
+            Are you sure you want to delete the contract for <span className="font-semibold text-gray-900">"{fileToDelete?.clientName}"</span>?
           </p>
           <div className="flex justify-end gap-3">
             <button

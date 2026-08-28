@@ -2,11 +2,15 @@
 
 interface FeatureFlags {
   performanceGuaranteeLdflag: boolean;
+  reviewProgressLdflag: boolean;
+  reportsLdflag: boolean;
 }
 
 // Default flag values
 const defaultFlags: FeatureFlags = {
   performanceGuaranteeLdflag: true,
+  reviewProgressLdflag: false,
+  reportsLdflag: false,
 };
 
 // Get feature flag value
@@ -19,4 +23,6 @@ export function getFeatureFlag(flagName: keyof FeatureFlags): boolean {
 // Export flag names for easier usage
 export const FeatureFlagKeys = {
   PERFORMANCE_GUARANTEE: 'performanceGuaranteeLdflag' as keyof FeatureFlags,
+  REVIEW_PROGRESS: 'reviewProgressLdflag' as keyof FeatureFlags,
+  REPORTS: 'reportsLdflag' as keyof FeatureFlags,
 } as const;
