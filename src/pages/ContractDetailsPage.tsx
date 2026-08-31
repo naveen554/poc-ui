@@ -671,11 +671,11 @@ export function ContractDetailsPage() {
                                   <ClipboardListIcon className="h-4 w-4" />
                                   <span className="font-semibold">Policies ({policyNumbers.length})</span>
                                   <span className="ml-auto text-[11px]">
+                                    <span className="text-gray-600 font-semibold">{contractItem.total_pgs} Total PGs</span>
+                                    {' • '}
                                     <span className="text-green-700 font-semibold">{contractItem.standard_count} Standard</span>
                                     {' • '}
                                     <span className="text-amber-700 font-semibold">{contractItem.non_standard_count} Non-Standard</span>
-                                    {' • '}
-                                    <span className="text-gray-600 font-semibold">{contractItem.total_pgs} Total PGs</span>
                                   </span>
                                 </div>
                                 
