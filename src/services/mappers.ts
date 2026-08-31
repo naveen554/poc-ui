@@ -10,11 +10,27 @@ export function mapStatusToFileStatus(apiStatus: string | null): FileStatus {
     return 'Processing';
   }
   
-  if (status === 'COMPLETED' || status === 'APPROVED' || status === 'PENDING_REVIEW') {
+  if (status === 'PENDING_REVIEW') {
+    return 'Pending Review';
+  }
+  
+  if (status === 'PARTIALLY_REVIEWED') {
+    return 'Partially Reviewed';
+  }
+  
+  if (status === 'APPROVED') {
+    return 'Approved';
+  }
+  
+  if (status === 'COMPLETED') {
     return 'Completed';
   }
   
-  if (status === 'FAILED' || status === 'REJECTED') {
+  if (status === 'REJECTED') {
+    return 'Rejected';
+  }
+  
+  if (status === 'FAILED') {
     return 'Failed';
   }
   

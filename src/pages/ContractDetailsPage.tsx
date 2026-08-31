@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, XCircleIcon, AlertCircleIcon, InfoIcon, EyeIcon, RefreshCwIcon, DownloadIcon, RotateCcwIcon, SaveIcon, FileTextIcon, BriefcaseIcon, Building2Icon, UploadCloudIcon, PhoneCallIcon, ClipboardListIcon, LinkIcon } from 'lucide-react';
-import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, listPoliciesForContract, getPGsByPolicy, updatePG, UpdatePGPayload, PerformanceGuarantee, PolicySummary, PGValidation, ContractValidation, ExtractionException } from '../services/api';
+import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, listPoliciesForContract, getPGsByPolicy, updatePG, UpdatePGPayload, PerformanceGuarantee, PolicySummary, PGValidation, ContractValidation, ExtractionException, getContractHierarchy, ContractHierarchyResponse } from '../services/api';
 import { ContractDetails } from '../services/api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Loader } from '../components/ui/Loader';
@@ -50,6 +50,7 @@ export function ContractDetailsPage() {
   const [pgsByPolicyLoading, setPgsByPolicyLoading] = useState<Record<string, boolean>>({});
   const [policySummaries, setPolicySummaries] = useState<PolicySummary[]>([]);
   const [usesPolicyHierarchy, setUsesPolicyHierarchy] = useState(false);
+  const [hierarchyData, setHierarchyData] = useState<ContractHierarchyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,6 +88,10 @@ export function ContractDetailsPage() {
 
       if (showPerformanceGuarantees) {
         try {
+          // Fetch hierarchy data
+          const hierarchy = await getContractHierarchy(fileId);
+          setHierarchyData(hierarchy);
+          
           const { summaries, hasHierarchy } = await loadPolicyList(fileId, contractData.policy_numbers);
           setPolicySummaries(summaries);
           setUsesPolicyHierarchy(hasHierarchy);
@@ -131,6 +136,10 @@ export function ContractDetailsPage() {
 
       if (showPerformanceGuarantees) {
         try {
+          // Refresh hierarchy data
+          const hierarchy = await getContractHierarchy(fileId);
+          setHierarchyData(hierarchy);
+          
           const { summaries, hasHierarchy } = await loadPolicyList(fileId, contractData.policy_numbers);
           setPolicySummaries(summaries);
           setUsesPolicyHierarchy(hasHierarchy);
@@ -609,7 +618,190 @@ export function ContractDetailsPage() {
             })}
           </div>
 
-          {policySections.length === 0 ? (
+          {policySections.length === 0 && !hierarchyData ? (
+            <div className="rounded-md border border-gray-200 bg-white px-4 py-10 text-center text-[13px] text-gray-500 shadow-sm">
+              No policies found for this contract
+            </div>
+          ) : hierarchyData && hierarchyData.items.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {hierarchyData.items.map((brokerItem, brokerIdx) => {
+                const brokerKey = `broker:${brokerIdx}`;
+                const isBrokerOpen = openSections[brokerKey] ?? true;
+                
+                return (
+                  <div key={brokerKey} className="rounded-lg border-2 border-navy-300 bg-white shadow-md overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(brokerKey)}
+                      className="w-full flex items-center gap-3 bg-gradient-to-r from-navy-700 to-navy-600 px-5 py-3 text-left text-white transition-colors hover:from-navy-800 hover:to-navy-700"
+                    >
+                      <ChevronDownIcon className={`h-5 w-5 shrink-0 transition-transform ${isBrokerOpen ? '' : '-rotate-90'}`} />
+                      <BriefcaseIcon className="h-5 w-5 shrink-0" />
+                      <div className="flex flex-col leading-tight min-w-0">
+                        <span className="text-[11px] uppercase tracking-wider text-white/70 font-semibold">Broker</span>
+                        <span className="text-[15px] font-bold truncate">{brokerItem.broker}</span>
+                      </div>
+                    </button>
+                    
+                    {isBrokerOpen && brokerItem.clients.map((client, clientIdx) => {
+                      const clientKey = `${brokerKey}:client:${clientIdx}`;
+                      const isClientOpen = openSections[clientKey] ?? true;
+                      
+                      return (
+                        <div key={clientKey} className="border-t border-navy-200">
+                          <button
+                            type="button"
+                            onClick={() => toggleSection(clientKey)}
+                            className="w-full flex items-center gap-3 bg-navy-50 px-5 py-3 text-left transition-colors hover:bg-navy-100"
+                          >
+                            <ChevronDownIcon className={`h-4 w-4 shrink-0 text-navy-700 transition-transform ${isClientOpen ? '' : '-rotate-90'}`} />
+                            <Building2Icon className="h-4 w-4 shrink-0 text-navy-600" />
+                            <div className="flex flex-col leading-tight min-w-0">
+                              <span className="text-[10px] uppercase tracking-wide text-navy-500 font-semibold">Client</span>
+                              <span className="text-[14px] font-bold text-navy-800 truncate">{client.client_name}</span>
+                            </div>
+                          </button>
+                          
+                          {isClientOpen && client.contracts.map((contractItem, contractIdx) => {
+                            const policyNumbers = contractItem.policy_numbers || [];
+                            
+                            return (
+                              <div key={contractIdx} className="bg-gray-50/60 px-5 py-4 border-t border-gray-200">
+                                <div className="mb-3 flex items-center gap-2 text-[12px] text-gray-600">
+                                  <ClipboardListIcon className="h-4 w-4" />
+                                  <span className="font-semibold">Policies ({policyNumbers.length})</span>
+                                  <span className="ml-auto text-[11px]">
+                                    <span className="text-green-700 font-semibold">{contractItem.standard_count} Standard</span>
+                                    {' • '}
+                                    <span className="text-amber-700 font-semibold">{contractItem.non_standard_count} Non-Standard</span>
+                                    {' • '}
+                                    <span className="text-gray-600 font-semibold">{contractItem.total_pgs} Total PGs</span>
+                                  </span>
+                                </div>
+                                
+                                <div className="flex flex-col gap-2">
+                                  {policyNumbers.map((policyNumber) => {
+                                    const policyKey = `${clientKey}:policy:${policyNumber}`;
+                                    const isPolicyOpen = openSections[policyKey] ?? false;
+                                    const isLoaded = pgsByPolicy[policyNumber] !== undefined;
+                                    const isLoading = pgsByPolicyLoading[policyNumber] === true;
+                                    
+                                    const policyPgs = pgsByPolicy[policyNumber] ?? [];
+                                    const scopedFiltered = policyPgs.filter((pg) => {
+                                      if (pgTab === 'all') return true;
+                                      if (pgTab === 'standard') return isStandard(pg.classification);
+                                      if (pgTab === 'nonStandard') return isNonStandard(pg.classification);
+                                      if (pgTab === 'custom') return isCustom(pg.classification);
+                                      return false;
+                                    });
+                                    
+                                    const categories = scopedFiltered.reduce<Record<string, PerformanceGuarantee[]>>((acc, pg) => {
+                                      const key = pg.pg_category || 'Uncategorized';
+                                      if (!acc[key]) acc[key] = [];
+                                      acc[key].push(pg);
+                                      return acc;
+                                    }, {});
+                                    
+                                    const summary = policySummaries.find((p) => p.policy_number === policyNumber);
+                                    const summaryTotal = summary?.total_pgs ?? summary?.pg_count ?? scopedFiltered.length;
+                                    
+                                    return (
+                                      <div key={policyKey} className="rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            toggleSection(policyKey);
+                                            ensurePolicyPGsLoaded(policyNumber);
+                                          }}
+                                          className="w-full flex items-center gap-3 bg-navy-600 px-4 py-2.5 text-left text-white transition-colors hover:bg-navy-700"
+                                        >
+                                          <ChevronDownIcon className={`h-4 w-4 shrink-0 transition-transform ${isPolicyOpen ? '' : '-rotate-90'}`} />
+                                          <FileTextIcon className="h-4 w-4 shrink-0" />
+                                          <div className="flex flex-col leading-tight min-w-0">
+                                            <span className="text-[10px] uppercase tracking-wide text-white/70">Policy Number</span>
+                                            <span className="text-[13px] font-mono font-semibold truncate">{policyNumber}</span>
+                                          </div>
+                                          <span className="ml-auto inline-flex items-center gap-2">
+                                            {summary && (summary.pending_review > 0) && (
+                                              <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                                {summary.pending_review} Pending
+                                              </span>
+                                            )}
+                                            {summary && (summary.approved > 0) && (
+                                              <span className="rounded bg-green-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                                {summary.approved} Approved
+                                              </span>
+                                            )}
+                                          </span>
+                                        </button>
+                                        
+                                        {isPolicyOpen && (
+                                          <div className="flex flex-col gap-4 p-4 bg-gray-50/60">
+                                            {isLoading ? (
+                                              <div className="flex items-center justify-center py-8">
+                                                <img src="/NylLogo.svg" alt="NYL Logo" className="h-8 w-8 animate-spin-y" />
+                                              </div>
+                                            ) : !isLoaded ? (
+                                              <div className="text-center text-[12.5px] text-gray-500 py-6">
+                                                Loading performance guarantees…
+                                              </div>
+                                            ) : scopedFiltered.length === 0 ? (
+                                              <div className="text-center text-[12.5px] text-gray-500 py-6">
+                                                {summaryTotal === 0 ? 'No performance guarantees under this policy.' : 'No PGs match the current filter.'}
+                                              </div>
+                                            ) : (
+                                              Object.entries(categories).map(([category, list]) => {
+                                                const catKey = `${policyKey}:cat:${category}`;
+                                                const catOpen = openSections[catKey] ?? true;
+                                                return (
+                                                  <div key={category} className="rounded border border-gray-200 bg-white overflow-hidden">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => toggleSection(catKey)}
+                                                      className="w-full flex items-center gap-2 bg-navy-50 px-3 py-2 text-left transition-colors hover:bg-navy-100"
+                                                    >
+                                                      <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-navy-700 transition-transform ${catOpen ? '' : '-rotate-90'}`} />
+                                                      <span className="text-[12px] font-semibold text-navy-800 truncate">{category}</span>
+                                                      <span className="ml-auto rounded bg-white border border-navy-200 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700">
+                                                        {list.length}
+                                                      </span>
+                                                    </button>
+                                                    {catOpen && (
+                                                      <div className="flex flex-col gap-3 p-3">
+                                                        {list.map((pg) => (
+                                                          <PGEditor
+                                                            key={pg.pg_record_id}
+                                                            pg={pg}
+                                                            onSave={(payload) => handleSavePG(pg, payload)}
+                                                            isStandard={isStandard}
+                                                            isNonStandard={isNonStandard}
+                                                            isCustom={isCustom}
+                                                            showValidations={showPgValidations}
+                                                          />
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          ) : policySections.length === 0 ? (
             <div className="rounded-md border border-gray-200 bg-white px-4 py-10 text-center text-[13px] text-gray-500 shadow-sm">
               No policies found for this contract
             </div>

@@ -267,6 +267,57 @@ export async function listContractsHierarchy(
   return response.json();
 }
 
+export interface ContractHierarchyItem {
+  broker: string;
+  clients: {
+    client_name: string;
+    contracts: {
+      broker: string;
+      client_name: string;
+      contract_id: string;
+      overall_status: string;
+      total_pgs: number;
+      standard_count: number;
+      non_standard_count: number;
+      human_review_count: number;
+      agreement_period_start: string;
+      agreement_period_end: string;
+      agreement_period_type: string;
+      policy_numbers: string[];
+      uploaded_at: string;
+      validation_failures: number;
+      validation_warnings: number;
+    }[];
+  }[];
+}
+
+export interface ContractHierarchyResponse {
+  items: ContractHierarchyItem[];
+  total: number;
+}
+
+export async function getContractHierarchy(
+  contractId: string
+): Promise<ContractHierarchyResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/contracts/${contractId}/hierarchy`,
+    {
+      method: 'GET',
+      headers: {
+        'X-API-Key': API_KEY,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch contract hierarchy: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
+}
+
 export interface PolicySummary {
   policy_number: string;
   policy_id?: string;
