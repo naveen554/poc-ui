@@ -2,11 +2,13 @@ import { NavLink } from 'react-router-dom';
 import { getFeatureFlag, FeatureFlagKeys } from '../config/launchdarkly';
 
 export function TopNav() {
-  const showReports = getFeatureFlag(FeatureFlagKeys.REPORTS);
+  const showDataHarness = getFeatureFlag(FeatureFlagKeys.DATA_HARNESS);
+  const showInsights = getFeatureFlag(FeatureFlagKeys.REPORTS);
 
   const links = [
-    { to: '/contracts', label: 'Contracts' },
-    ...(showReports ? [{ to: '/reports', label: 'Reports' }] : []),
+    { to: '/pg-management', label: 'PG Management' },
+    ...(showDataHarness ? [{ to: '/data-harness', label: 'Data Harness' }] : []),
+    ...(showInsights ? [{ to: '/insights', label: 'Insights & Metrics' }] : []),
   ];
 
   return (

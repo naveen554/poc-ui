@@ -18,6 +18,7 @@ export function FilesTable({ files, onView, onDelete }: FilesTableProps) {
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[200px]">Client</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[180px]">Policies</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[80px]">PGs</th>
+            <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[100px]">Completed</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[90px]">Pending</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[130px]">Status</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[170px]">Uploaded</th>
@@ -27,7 +28,7 @@ export function FilesTable({ files, onView, onDelete }: FilesTableProps) {
         <tbody>
           {files.length === 0 &&
           <tr>
-              <td colSpan={7} className="px-3 py-10 text-center text-[13px] text-gray-500">
+              <td colSpan={8} className="px-3 py-10 text-center text-[13px] text-gray-500">
                 No contracts match your search.
               </td>
             </tr>
@@ -35,6 +36,8 @@ export function FilesTable({ files, onView, onDelete }: FilesTableProps) {
           {files.map((file) => {
             const pgsDisplay = file.pgsTotal > 0 ? file.pgsTotal.toString() : '—';
             const pendingDisplay = file.pgsPending > 0 ? file.pgsPending.toString() : '0';
+            const completed = Math.max(file.pgsTotal - file.pgsPending, 0);
+            const completedDisplay = file.pgsTotal > 0 ? completed.toString() : '0';
             const policiesDisplay = file.policies.join(', ');
             
             return (
@@ -55,6 +58,9 @@ export function FilesTable({ files, onView, onDelete }: FilesTableProps) {
                 </td>
                 <td className="px-3 py-3 text-[13px] font-semibold text-navy-700 w-[80px]">
                   {pgsDisplay}
+                </td>
+                <td className="px-3 py-3 text-[13px] font-semibold text-emerald-600 w-[100px]">
+                  {completedDisplay}
                 </td>
                 <td className="px-3 py-3 text-[13px] font-semibold text-amber-600 w-[90px]">
                   {pendingDisplay}

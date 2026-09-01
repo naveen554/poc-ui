@@ -88,7 +88,6 @@ export function ContractDetailsPage() {
 
       if (showPerformanceGuarantees) {
         try {
-          // Fetch hierarchy data
           const hierarchy = await getContractHierarchy(fileId);
           setHierarchyData(hierarchy);
           
@@ -136,7 +135,6 @@ export function ContractDetailsPage() {
 
       if (showPerformanceGuarantees) {
         try {
-          // Refresh hierarchy data
           const hierarchy = await getContractHierarchy(fileId);
           setHierarchyData(hierarchy);
           
@@ -259,10 +257,10 @@ export function ContractDetailsPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3">
           <p className="text-sm text-red-800">{error || 'Contract not found'}</p>
           <button
-            onClick={() => navigate('/contracts')}
+            onClick={() => navigate('/pg-management')}
             className="mt-2 text-sm font-semibold text-red-900 underline"
           >
-            Back to Contracts
+            Back to PG Management
           </button>
         </div>
       </div>
@@ -358,10 +356,10 @@ export function ContractDetailsPage() {
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 px-4 py-4">
       <nav className="flex items-center gap-1 text-sm text-gray-600">
         <button
-          onClick={() => navigate('/contracts')}
+          onClick={() => navigate('/pg-management')}
           className="hover:text-navy-700 transition-colors"
         >
-          Contracts
+          PG Management
         </button>
         <ChevronRightIcon className="h-4 w-4" />
         <span className="text-navy-700 font-medium">{contract.client_name}</span>
@@ -671,11 +669,11 @@ export function ContractDetailsPage() {
                                   <ClipboardListIcon className="h-4 w-4" />
                                   <span className="font-semibold">Policies ({policyNumbers.length})</span>
                                   <span className="ml-auto text-[11px]">
-                                    <span className="text-gray-600 font-semibold">{contractItem.total_pgs} Total PGs</span>
-                                    {' • '}
                                     <span className="text-green-700 font-semibold">{contractItem.standard_count} Standard</span>
                                     {' • '}
                                     <span className="text-amber-700 font-semibold">{contractItem.non_standard_count} Non-Standard</span>
+                                    {' • '}
+                                    <span className="text-gray-600 font-semibold">{contractItem.total_pgs} Total PGs</span>
                                   </span>
                                 </div>
                                 

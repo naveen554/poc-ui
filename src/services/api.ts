@@ -181,6 +181,293 @@ export interface ContractsListResponse {
   offset: number;
 }
 
+export interface ExecutiveOverview {
+  data: {
+    total_contracts: number;
+    total_clients: number;
+    total_brokers: number;
+    total_pgs: number;
+    total_policies: number;
+    standard_pgs: number;
+    non_standard_pgs: number;
+    custom_new_pgs: number;
+    review_backlog: number;
+    overdue_reviews: number;
+    unassigned_reviews: number;
+    open_exceptions: number;
+    known_dollar_caps: string;
+    uncapped_contracts: number;
+    estimated_ai_cost_usd: string;
+    total_ai_tokens: number;
+  };
+  filter: {
+    from: string | null;
+    to: string | null;
+  };
+}
+
+export interface ContractItem {
+  contract_id: string;
+  client_name: string;
+  broker_producer: string;
+  region: string | null;
+  segment: string | null;
+  account_manager: string | null;
+  overall_status: string;
+  signature_status: string;
+  agreement_period_start: string;
+  agreement_period_end: string;
+  renewal_date: string | null;
+  cancellation_date: string | null;
+  total_amount_at_risk_type: string;
+  total_amount_at_risk_desc: string;
+  dollar_cap: string | null;
+  premium_percentage: string;
+  admin_fee_percentage: string;
+  total_pgs: number;
+  non_standard_pgs: number;
+  pending_pgs: number;
+  contract_validation_failures: number;
+  contract_validation_warnings: number;
+  uploaded_at: string;
+  estimated_cost_usd: string;
+}
+
+export interface ContractPortfolio {
+  items: ContractItem[];
+  count: number;
+  filter: { from: string | null; to: string | null };
+}
+
+export interface PolicyItem {
+  policy_id: string;
+  policy_number: string;
+  product_line: string | null;
+  status: string;
+  effective_date: string | null;
+  end_date: string | null;
+  contract_id: string;
+  client_name: string;
+  broker_producer: string;
+  applicable_pgs: number;
+  non_standard_pgs: number;
+  pending_pgs: number;
+}
+
+export interface PolicyPortfolio {
+  items: PolicyItem[];
+  count: number;
+  filter: { from: string | null; to: string | null };
+}
+
+export interface PGItem {
+  pg_category: string;
+  pg_sub_category: string;
+  pg_metric_name: string;
+  department: string | null;
+  operational_area: string;
+  evaluation_period: string;
+  reporting_cadence: string | null;
+  penalty_cadence: string | null;
+  penalty_type: string;
+  threshold_unit: string | null;
+  total_pgs: number;
+  standard_pgs: number;
+  non_standard_pgs: number;
+  custom_new_pgs: number;
+  attention_pgs: number;
+  pending_pgs: number;
+  amended_pgs: number;
+  avg_penalty_allocation_pct: string;
+}
+
+export interface PGAnalysis {
+  items: PGItem[];
+  count: number;
+  filter: { from: string | null; to: string | null };
+}
+
+export interface ProductItem {
+  product_line: string;
+  total_pgs: number;
+  non_standard_pgs: number;
+  pending_pgs: number;
+  attention_pgs: number;
+  avg_penalty_allocation_pct: string;
+  pgs_with_penalty: number;
+  contracts: number;
+}
+
+export interface ProductPortfolio {
+  items: ProductItem[];
+  count: number;
+  filter: { from: string | null; to: string | null };
+}
+
+export interface BrokerItem {
+  broker_producer: string;
+  contracts: number;
+  clients: number;
+  known_dollar_caps: string;
+  total_pgs: number;
+  non_standard_pgs: number;
+  open_exceptions: number;
+  next_contract_end: string;
+}
+
+export interface BrokerPortfolio {
+  items: BrokerItem[];
+  count: number;
+  filter: { from: string | null; to: string | null };
+}
+
+export interface OperationsReport {
+  data: {
+    review_workload: Array<{
+      assignee: string;
+      status: string;
+      priority: number;
+      items: number;
+      overdue_items: number;
+      average_age_hours: string;
+    }>;
+    exceptions: Array<{
+      exception_category: string;
+      exception_type: string;
+      resolution_status: string;
+      items: number;
+    }>;
+    intake_timeline: Array<{
+      day: string;
+      contracts: number;
+      extracted_pgs: number;
+      estimated_ai_cost_usd: string;
+    }>;
+  };
+  filter: { from: string | null; to: string | null };
+}
+
+export async function getExecutiveOverview(
+  fromDate?: string,
+  toDate?: string
+): Promise<ExecutiveOverview> {
+  let url = `${API_BASE_URL}/reporting/dashboard/overview`;
+  const params = new URLSearchParams();
+  if (fromDate) params.append('from', fromDate);
+  if (toDate) params.append('to', toDate);
+  if (params.toString()) url += `?${params.toString()}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch executive overview: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getContractPortfolio(): Promise<ContractPortfolio> {
+  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/contracts`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch contract portfolio: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getPolicyPortfolio(): Promise<PolicyPortfolio> {
+  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/policies`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch policy portfolio: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getPGAnalysis(): Promise<PGAnalysis> {
+  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/pgs`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PG analysis: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getProductPortfolio(): Promise<ProductPortfolio> {
+  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/products`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch product portfolio: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getBrokerPortfolio(): Promise<BrokerPortfolio> {
+  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/brokers`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch broker portfolio: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getOperationsReport(): Promise<OperationsReport> {
+  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/operations`, {
+    method: 'GET',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch operations report: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function listContracts(
   limit: number = 25,
   offset: number = 0

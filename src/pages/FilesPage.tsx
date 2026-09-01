@@ -285,7 +285,7 @@ export function FilesPage() {
           <FilesTable
             files={visibleFiles}
             onView={(file) =>
-            navigate(`/contracts/${file.id}`, {
+            navigate(`/pg-management/${file.id}`, {
               state: { clientName: file.clientName, status: file.status }
             })
             }
