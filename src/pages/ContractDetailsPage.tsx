@@ -313,14 +313,6 @@ export function ContractDetailsPage() {
     custom: pgs.filter(pg => isCustom(pg.classification)).length,
   };
 
-  const filteredPgs = pgs.filter(pg => {
-    if (pgTab === 'all') return true;
-    if (pgTab === 'standard') return isStandard(pg.classification);
-    if (pgTab === 'nonStandard') return isNonStandard(pg.classification);
-    if (pgTab === 'custom') return isCustom(pg.classification);
-    return false;
-  });
-
   const policyList = policySummaries.length > 0
     ? policySummaries.map((p) => p.policy_number)
     : (contract.policy_numbers && contract.policy_numbers.length > 0
@@ -336,10 +328,15 @@ export function ContractDetailsPage() {
       if (pgTab === 'custom') return isCustom(pg.classification);
       return false;
     });
-    const categories = scopedFiltered.reduce<Record<string, PerformanceGuarantee[]>>((acc, pg) => {
-      const key = pg.pg_category || 'Uncategorized';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(pg);
+    const products = scopedFiltered.reduce<Record<string, PerformanceGuarantee[]>>((acc, pg) => {
+      const lines = Array.isArray(pg.product_line) && pg.product_line.length > 0
+        ? pg.product_line
+        : ['Unassigned'];
+      lines.forEach((line) => {
+        const key = line || 'Unassigned';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(pg);
+      });
       return acc;
     }, {});
     const summary = policySummaries.find((p) => p.policy_number === policyNumber);
@@ -347,7 +344,7 @@ export function ContractDetailsPage() {
       key: policyNumber,
       label: policyNumber,
       pgs: scopedFiltered,
-      categories,
+      products,
       summary,
     };
   });
@@ -693,10 +690,15 @@ export function ContractDetailsPage() {
                                       return false;
                                     });
                                     
-                                    const categories = scopedFiltered.reduce<Record<string, PerformanceGuarantee[]>>((acc, pg) => {
-                                      const key = pg.pg_category || 'Uncategorized';
-                                      if (!acc[key]) acc[key] = [];
-                                      acc[key].push(pg);
+                                    const products = scopedFiltered.reduce<Record<string, PerformanceGuarantee[]>>((acc, pg) => {
+                                      const lines = Array.isArray(pg.product_line) && pg.product_line.length > 0
+                                        ? pg.product_line
+                                        : ['Unassigned'];
+                                      lines.forEach((line) => {
+                                        const key = line || 'Unassigned';
+                                        if (!acc[key]) acc[key] = [];
+                                        acc[key].push(pg);
+                                      });
                                       return acc;
                                     }, {});
                                     
@@ -748,27 +750,28 @@ export function ContractDetailsPage() {
                                                 {summaryTotal === 0 ? 'No performance guarantees under this policy.' : 'No PGs match the current filter.'}
                                               </div>
                                             ) : (
-                                              Object.entries(categories).map(([category, list]) => {
-                                                const catKey = `${policyKey}:cat:${category}`;
-                                                const catOpen = openSections[catKey] ?? true;
+                                              Object.entries(products).map(([product, list]) => {
+                                                const productKey = `${policyKey}:product:${product}`;
+                                                const productOpen = openSections[productKey] ?? true;
                                                 return (
-                                                  <div key={category} className="rounded border border-gray-200 bg-white overflow-hidden">
+                                                  <div key={product} className="rounded border border-gray-200 bg-white overflow-hidden">
                                                     <button
                                                       type="button"
-                                                      onClick={() => toggleSection(catKey)}
+                                                      onClick={() => toggleSection(productKey)}
                                                       className="w-full flex items-center gap-2 bg-navy-50 px-3 py-2 text-left transition-colors hover:bg-navy-100"
                                                     >
-                                                      <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-navy-700 transition-transform ${catOpen ? '' : '-rotate-90'}`} />
-                                                      <span className="text-[12px] font-semibold text-navy-800 truncate">{category}</span>
+                                                      <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-navy-700 transition-transform ${productOpen ? '' : '-rotate-90'}`} />
+                                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-navy-600">Product</span>
+                                                      <span className="text-[12px] font-semibold text-navy-800 truncate">{product}</span>
                                                       <span className="ml-auto rounded bg-white border border-navy-200 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700">
                                                         {list.length}
                                                       </span>
                                                     </button>
-                                                    {catOpen && (
+                                                    {productOpen && (
                                                       <div className="flex flex-col gap-3 p-3">
                                                         {list.map((pg) => (
                                                           <PGEditor
-                                                            key={pg.pg_record_id}
+                                                            key={`${product}:${pg.pg_record_id}`}
                                                             pg={pg}
                                                             onSave={(payload) => handleSavePG(pg, payload)}
                                                             isStandard={isStandard}
@@ -851,27 +854,28 @@ export function ContractDetailsPage() {
                             {summaryTotal === 0 ? 'No performance guarantees under this policy.' : 'No PGs match the current filter.'}
                           </div>
                         ) : (
-                          Object.entries(section.categories).map(([category, list]) => {
-                            const catKey = `policy:${section.key}:cat:${category}`;
-                            const catOpen = openSections[catKey] ?? true;
+                          Object.entries(section.products).map(([product, list]) => {
+                            const productKey = `policy:${section.key}:product:${product}`;
+                            const productOpen = openSections[productKey] ?? true;
                             return (
-                              <div key={category} className="rounded border border-gray-200 bg-white overflow-hidden">
+                              <div key={product} className="rounded border border-gray-200 bg-white overflow-hidden">
                                 <button
                                   type="button"
-                                  onClick={() => toggleSection(catKey)}
+                                  onClick={() => toggleSection(productKey)}
                                   className="w-full flex items-center gap-2 bg-navy-50 px-3 py-2 text-left transition-colors hover:bg-navy-100"
                                 >
-                                  <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-navy-700 transition-transform ${catOpen ? '' : '-rotate-90'}`} />
-                                  <span className="text-[12px] font-semibold text-navy-800 truncate">{category}</span>
+                                  <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-navy-700 transition-transform ${productOpen ? '' : '-rotate-90'}`} />
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-navy-600">Product</span>
+                                  <span className="text-[12px] font-semibold text-navy-800 truncate">{product}</span>
                                   <span className="ml-auto rounded bg-white border border-navy-200 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700">
                                     {list.length}
                                   </span>
                                 </button>
-                                {catOpen && (
+                                {productOpen && (
                                   <div className="flex flex-col gap-3 p-3">
                                     {list.map((pg) => (
                                       <PGEditor
-                                        key={pg.pg_record_id}
+                                        key={`${product}:${pg.pg_record_id}`}
                                         pg={pg}
                                         onSave={(payload) => handleSavePG(pg, payload)}
                                         isStandard={isStandard}
@@ -1031,7 +1035,6 @@ function PGEditor({
     isCustom(classificationValue) ? 'text-red-700 bg-red-50 border-red-200' :
     'text-gray-700 bg-gray-50 border-gray-200';
 
-  const productDisplay = pg.product_line?.length > 0 ? pg.product_line.join(', ') : '—';
   const confidenceValue = parseFloat(pg.confidence_score || '0');
   const reviewStatus = pg.review_status === 'PENDING_REVIEW' ? 'Pending' : pg.review_status || '—';
   const statusColor =
@@ -1059,7 +1062,6 @@ function PGEditor({
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
-            <span>Product: <span className="font-medium text-gray-700">{productDisplay}</span></span>
             <span>Confidence: <span className="font-semibold text-gray-700">{confidenceValue ? confidenceValue.toFixed(2) : '—'}</span></span>
           </div>
         </div>

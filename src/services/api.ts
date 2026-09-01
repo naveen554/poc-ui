@@ -1,5 +1,6 @@
-const API_BASE_URL = 'https://mjl012ia1a.execute-api.us-east-2.amazonaws.com/poc/api/v1';
-const API_KEY = 'nyl-poc-admin-key-2026';
+const API_BASE_URL =
+  "https://mjl012ia1a.execute-api.us-east-2.amazonaws.com/poc/api/v1";
+const API_KEY = "nyl-poc-admin-key-2026";
 
 export interface UploadResponse {
   contractId: string;
@@ -9,7 +10,7 @@ export interface UploadResponse {
 }
 
 export interface ContractValidation {
-  status: 'PASS' | 'FAIL' | 'WARN' | 'INFO' | 'SKIP';
+  status: "PASS" | "FAIL" | "WARN" | "INFO" | "SKIP";
   message: string;
   rule_id: string;
   rule_definition?: PGRuleDefinition;
@@ -98,18 +99,18 @@ export interface ContractDetails {
 
 export async function uploadContract(
   file: File,
-  clientHint?: string
+  clientHint?: string,
 ): Promise<UploadResponse> {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append("file", file);
   if (clientHint) {
-    formData.append('clientHint', clientHint);
+    formData.append("clientHint", clientHint);
   }
 
   const response = await fetch(`${API_BASE_URL}/contracts/upload`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'X-API-Key': API_KEY,
+      "X-API-Key": API_KEY,
     },
     body: formData,
   });
@@ -123,19 +124,21 @@ export async function uploadContract(
 }
 
 export async function getContractDetails(
-  contractId: string
+  contractId: string,
 ): Promise<ContractDetails> {
   const response = await fetch(`${API_BASE_URL}/contracts/${contractId}`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch contract: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch contract: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json();
@@ -153,22 +156,24 @@ export interface PipelineStatusResponse {
 }
 
 export async function getContractPipelineStatus(
-  contractId: string
+  contractId: string,
 ): Promise<PipelineStatusResponse> {
   const response = await fetch(
     `${API_BASE_URL}/contracts/${contractId}/pipeline`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch pipeline status: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch pipeline status: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json();
@@ -349,19 +354,19 @@ export interface OperationsReport {
 
 export async function getExecutiveOverview(
   fromDate?: string,
-  toDate?: string
+  toDate?: string,
 ): Promise<ExecutiveOverview> {
   let url = `${API_BASE_URL}/reporting/dashboard/overview`;
   const params = new URLSearchParams();
-  if (fromDate) params.append('from', fromDate);
-  if (toDate) params.append('to', toDate);
+  if (fromDate) params.append("from", fromDate);
+  if (toDate) params.append("to", toDate);
   if (params.toString()) url += `?${params.toString()}`;
 
   const response = await fetch(url, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -373,13 +378,16 @@ export async function getExecutiveOverview(
 }
 
 export async function getContractPortfolio(): Promise<ContractPortfolio> {
-  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/contracts`, {
-    method: 'GET',
-    headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    `${API_BASE_URL}/reporting/dashboard/contracts`,
+    {
+      method: "GET",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch contract portfolio: ${response.status}`);
@@ -390,10 +398,10 @@ export async function getContractPortfolio(): Promise<ContractPortfolio> {
 
 export async function getPolicyPortfolio(): Promise<PolicyPortfolio> {
   const response = await fetch(`${API_BASE_URL}/reporting/dashboard/policies`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -406,10 +414,10 @@ export async function getPolicyPortfolio(): Promise<PolicyPortfolio> {
 
 export async function getPGAnalysis(): Promise<PGAnalysis> {
   const response = await fetch(`${API_BASE_URL}/reporting/dashboard/pgs`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -422,10 +430,10 @@ export async function getPGAnalysis(): Promise<PGAnalysis> {
 
 export async function getProductPortfolio(): Promise<ProductPortfolio> {
   const response = await fetch(`${API_BASE_URL}/reporting/dashboard/products`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -438,10 +446,10 @@ export async function getProductPortfolio(): Promise<ProductPortfolio> {
 
 export async function getBrokerPortfolio(): Promise<BrokerPortfolio> {
   const response = await fetch(`${API_BASE_URL}/reporting/dashboard/brokers`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -453,13 +461,16 @@ export async function getBrokerPortfolio(): Promise<BrokerPortfolio> {
 }
 
 export async function getOperationsReport(): Promise<OperationsReport> {
-  const response = await fetch(`${API_BASE_URL}/reporting/dashboard/operations`, {
-    method: 'GET',
-    headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    `${API_BASE_URL}/reporting/dashboard/operations`,
+    {
+      method: "GET",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch operations report: ${response.status}`);
@@ -470,17 +481,17 @@ export async function getOperationsReport(): Promise<OperationsReport> {
 
 export async function listContracts(
   limit: number = 25,
-  offset: number = 0
+  offset: number = 0,
 ): Promise<ContractDetails[]> {
   const response = await fetch(
     `${API_BASE_URL}/contracts?limit=${limit}&offset=${offset}`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
@@ -488,7 +499,9 @@ export async function listContracts(
       return [];
     }
     const errorText = await response.text();
-    throw new Error(`Failed to fetch contracts: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch contracts: ${response.status} ${errorText}`,
+    );
   }
 
   const data: ContractsListResponse = await response.json();
@@ -528,18 +541,18 @@ export interface HierarchyResponse {
 export async function listContractsHierarchy(
   limit: number = 25,
   offset: number = 0,
-  status?: string
+  status?: string,
 ): Promise<HierarchyResponse> {
   const url = new URL(`${API_BASE_URL}/contracts/hierarchy`);
-  url.searchParams.append('limit', String(limit));
-  url.searchParams.append('offset', String(offset));
-  if (status) url.searchParams.append('status', status);
+  url.searchParams.append("limit", String(limit));
+  url.searchParams.append("offset", String(offset));
+  if (status) url.searchParams.append("status", status);
 
   const response = await fetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -548,7 +561,9 @@ export async function listContractsHierarchy(
       return { brokers: [], total: 0, limit, offset };
     }
     const errorText = await response.text();
-    throw new Error(`Failed to fetch hierarchy: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch hierarchy: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json();
@@ -584,22 +599,24 @@ export interface ContractHierarchyResponse {
 }
 
 export async function getContractHierarchy(
-  contractId: string
+  contractId: string,
 ): Promise<ContractHierarchyResponse> {
   const response = await fetch(
     `${API_BASE_URL}/contracts/${contractId}/hierarchy`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch contract hierarchy: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch contract hierarchy: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json();
@@ -628,78 +645,108 @@ export interface PolicySummary {
 }
 
 export async function listPoliciesForContract(
-  contractId: string
+  contractId: string,
 ): Promise<PolicySummary[]> {
   const response = await fetch(
     `${API_BASE_URL}/contracts/${contractId}/policies`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
     if (response.status === 404) return [];
     const errorText = await response.text();
-    throw new Error(`Failed to fetch policies: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch policies: ${response.status} ${errorText}`,
+    );
   }
 
   const data = await response.json();
   const raw = data.items || data.policies || [];
-  return raw.map((item: any): PolicySummary => ({
-    policy_number: item.policy_number,
-    policy_id: item.policy_id,
-    product_line: item.product_line ?? null,
-    effective_date: item.effective_date ?? null,
-    end_date: item.end_date ?? null,
-    status: item.status,
-    total_pgs: item.total_pgs ?? item.pg_count ?? 0,
-    pg_count: item.pg_count,
-    pending_review: item.pending_review ?? item.pending_count ?? 0,
-    pending_count: item.pending_count,
-    reviewed_count: item.reviewed_count,
-    approved: item.approved ?? item.reviewed_count ?? 0,
-    approved_with_edits: item.approved_with_edits,
-    in_review: item.in_review,
-    classifications: item.classifications,
-  }));
+  return raw.map(
+    (item: any): PolicySummary => ({
+      policy_number: item.policy_number,
+      policy_id: item.policy_id,
+      product_line: item.product_line ?? null,
+      effective_date: item.effective_date ?? null,
+      end_date: item.end_date ?? null,
+      status: item.status,
+      total_pgs: item.total_pgs ?? item.pg_count ?? 0,
+      pg_count: item.pg_count,
+      pending_review: item.pending_review ?? item.pending_count ?? 0,
+      pending_count: item.pending_count,
+      reviewed_count: item.reviewed_count,
+      approved: item.approved ?? item.reviewed_count ?? 0,
+      approved_with_edits: item.approved_with_edits,
+      in_review: item.in_review,
+      classifications: item.classifications,
+    }),
+  );
 }
 
 export async function getPGsByPolicy(
   contractId: string,
   policyNumber: string,
-  filters?: { reviewStatus?: string; classification?: string }
+  filters?: { reviewStatus?: string; classification?: string },
 ): Promise<PerformanceGuarantee[]> {
-  const url = new URL(`${API_BASE_URL}/contracts/${contractId}/policies/${encodeURIComponent(policyNumber)}/pgs`);
-  if (filters?.reviewStatus) url.searchParams.append('reviewStatus', filters.reviewStatus);
-  if (filters?.classification) url.searchParams.append('classification', filters.classification);
+  const url = new URL(
+    `${API_BASE_URL}/contracts/${contractId}/policies/${encodeURIComponent(policyNumber)}/pgs`,
+  );
+  if (filters?.reviewStatus)
+    url.searchParams.append("reviewStatus", filters.reviewStatus);
+  if (filters?.classification)
+    url.searchParams.append("classification", filters.classification);
 
   const response = await fetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
   if (!response.ok) {
     if (response.status === 404) return [];
     const errorText = await response.text();
-    throw new Error(`Failed to fetch PGs for policy: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch PGs for policy: ${response.status} ${errorText}`,
+    );
   }
 
   const data = await response.json();
-  return data.items || [];
+  if (Array.isArray(data.items)) {
+    return data.items;
+  }
+
+  if (Array.isArray(data.products)) {
+    const seen = new Set<string>();
+    const flat: PerformanceGuarantee[] = [];
+    for (const product of data.products) {
+      if (!Array.isArray(product?.pgs)) continue;
+      for (const pg of product.pgs) {
+        const key =
+          pg?.pg_record_id ?? `${pg?.pg_id ?? ""}:${pg?.contract_id ?? ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        flat.push(pg);
+      }
+    }
+    return flat;
+  }
+
+  return [];
 }
 
 export function constructS3DocumentUrl(
   s3Bucket: string,
-  s3Key: string
+  s3Key: string,
 ): string {
-  if (!s3Bucket || !s3Key) return '';
+  if (!s3Bucket || !s3Key) return "";
   return `https://${s3Bucket}.s3.us-east-2.amazonaws.com/${s3Key}`;
 }
 
@@ -721,7 +768,7 @@ export interface PGRuleDefinition {
 }
 
 export interface PGValidation {
-  status: 'PASS' | 'FAIL' | 'WARN' | 'INFO' | 'SKIP';
+  status: "PASS" | "FAIL" | "WARN" | "INFO" | "SKIP";
   message: string;
   rule_id: string;
   rule_definition?: PGRuleDefinition;
@@ -788,7 +835,10 @@ export interface PerformanceGuarantee {
   volume_comparison_operator: string | null;
   volume_exception_notes: string | null;
   review_priority: number;
-  matched_policies?: Array<{ policy_number: string; product_line: string | null }>;
+  matched_policies?: Array<{
+    policy_number: string;
+    product_line: string | null;
+  }>;
   standard_reference_definition?: {
     pg_id?: string;
     enabled?: boolean;
@@ -824,18 +874,18 @@ export interface PerformanceGuarantee {
 
 export async function getPGsByContract(
   contractId: string,
-  reviewStatus?: string
+  reviewStatus?: string,
 ): Promise<PerformanceGuarantee[]> {
   const url = new URL(`${API_BASE_URL}/contracts/${contractId}/pgs`);
   if (reviewStatus) {
-    url.searchParams.append('reviewStatus', reviewStatus);
+    url.searchParams.append("reviewStatus", reviewStatus);
   }
 
   const response = await fetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -850,22 +900,24 @@ export async function getPGsByContract(
 
 export async function getPGDetail(
   contractId: string,
-  pgId: string
+  pgId: string,
 ): Promise<PerformanceGuarantee> {
   const response = await fetch(
     `${API_BASE_URL}/contracts/${contractId}/pgs/${pgId}`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch PG detail: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch PG detail: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json();
@@ -900,18 +952,18 @@ export interface UpdatePGPayload {
 export async function updatePG(
   contractId: string,
   pgId: string,
-  payload: UpdatePGPayload
+  payload: UpdatePGPayload,
 ): Promise<PerformanceGuarantee> {
   const response = await fetch(
     `${API_BASE_URL}/contracts/${contractId}/pgs/${pgId}`,
     {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -924,22 +976,24 @@ export async function updatePG(
 
 export async function getPGHistory(
   contractId: string,
-  pgId: string
+  pgId: string,
 ): Promise<PGHistoryItem[]> {
   const response = await fetch(
     `${API_BASE_URL}/contracts/${contractId}/pgs/${pgId}/history`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch PG history: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch PG history: ${response.status} ${errorText}`,
+    );
   }
 
   const data = await response.json();
@@ -947,22 +1001,21 @@ export async function getPGHistory(
 }
 
 export async function deleteContract(
-  contractId: string
+  contractId: string,
 ): Promise<{ message: string }> {
-  const response = await fetch(
-    `${API_BASE_URL}/contracts/${contractId}`,
-    {
-      method: 'DELETE',
-      headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  const response = await fetch(`${API_BASE_URL}/contracts/${contractId}`, {
+    method: "DELETE",
+    headers: {
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
+    },
+  });
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || `Failed to delete contract: ${response.status}`);
+    throw new Error(
+      errorData.message || `Failed to delete contract: ${response.status}`,
+    );
   }
 
   return response.json();
@@ -970,21 +1023,32 @@ export async function deleteContract(
 
 export async function searchPGs(
   q: string,
-  filters?: { classification?: string; reviewStatus?: string; department?: string; metricMasterMatch?: string; nonStandardPattern?: string }
+  filters?: {
+    classification?: string;
+    reviewStatus?: string;
+    department?: string;
+    metricMasterMatch?: string;
+    nonStandardPattern?: string;
+  },
 ): Promise<PerformanceGuarantee[]> {
   const url = new URL(`${API_BASE_URL}/pgs/search`);
-  url.searchParams.append('q', q);
-  if (filters?.classification) url.searchParams.append('classification', filters.classification);
-  if (filters?.reviewStatus) url.searchParams.append('reviewStatus', filters.reviewStatus);
-  if (filters?.department) url.searchParams.append('department', filters.department);
-  if (filters?.metricMasterMatch) url.searchParams.append('metricMasterMatch', filters.metricMasterMatch);
-  if (filters?.nonStandardPattern) url.searchParams.append('nonStandardPattern', filters.nonStandardPattern);
+  url.searchParams.append("q", q);
+  if (filters?.classification)
+    url.searchParams.append("classification", filters.classification);
+  if (filters?.reviewStatus)
+    url.searchParams.append("reviewStatus", filters.reviewStatus);
+  if (filters?.department)
+    url.searchParams.append("department", filters.department);
+  if (filters?.metricMasterMatch)
+    url.searchParams.append("metricMasterMatch", filters.metricMasterMatch);
+  if (filters?.nonStandardPattern)
+    url.searchParams.append("nonStandardPattern", filters.nonStandardPattern);
 
   const response = await fetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
@@ -1012,49 +1076,73 @@ export interface ReviewQueueItem {
   created_at: string;
 }
 
-export async function listReviewQueue(
-  params?: { contractId?: string; priority?: number; assignedTo?: string; limit?: number; offset?: number }
-): Promise<{ items: ReviewQueueItem[]; total: number; limit: number; offset: number }> {
+export async function listReviewQueue(params?: {
+  contractId?: string;
+  priority?: number;
+  assignedTo?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  items: ReviewQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}> {
   const url = new URL(`${API_BASE_URL}/review/queue`);
-  if (params?.contractId) url.searchParams.append('contractId', params.contractId);
-  if (params?.priority) url.searchParams.append('priority', String(params.priority));
-  if (params?.assignedTo) url.searchParams.append('assignedTo', params.assignedTo);
-  url.searchParams.append('limit', String(params?.limit ?? 25));
-  url.searchParams.append('offset', String(params?.offset ?? 0));
+  if (params?.contractId)
+    url.searchParams.append("contractId", params.contractId);
+  if (params?.priority)
+    url.searchParams.append("priority", String(params.priority));
+  if (params?.assignedTo)
+    url.searchParams.append("assignedTo", params.assignedTo);
+  url.searchParams.append("limit", String(params?.limit ?? 25));
+  url.searchParams.append("offset", String(params?.offset ?? 0));
 
   const response = await fetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
 
   if (!response.ok) {
-    if (response.status === 404) return { items: [], total: 0, limit: params?.limit ?? 25, offset: params?.offset ?? 0 };
+    if (response.status === 404)
+      return {
+        items: [],
+        total: 0,
+        limit: params?.limit ?? 25,
+        offset: params?.offset ?? 0,
+      };
     const errorText = await response.text();
-    throw new Error(`Failed to fetch review queue: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch review queue: ${response.status} ${errorText}`,
+    );
   }
 
   return response.json();
 }
 
-export async function getReviewItem(reviewId: string): Promise<ReviewQueueItem & { pg?: PerformanceGuarantee }> {
+export async function getReviewItem(
+  reviewId: string,
+): Promise<ReviewQueueItem & { pg?: PerformanceGuarantee }> {
   const response = await fetch(`${API_BASE_URL}/review/queue/${reviewId}`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch review item: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch review item: ${response.status} ${errorText}`,
+    );
   }
   return response.json();
 }
 
-export type ReviewAction = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES';
+export type ReviewAction = "APPROVE" | "REJECT" | "REQUEST_CHANGES";
 
 export interface ReviewDecisionPayload {
   action: ReviewAction;
@@ -1064,38 +1152,48 @@ export interface ReviewDecisionPayload {
 
 export async function submitReviewDecision(
   reviewId: string,
-  payload: ReviewDecisionPayload
+  payload: ReviewDecisionPayload,
 ): Promise<{ message: string; review_status: string }> {
-  const response = await fetch(`${API_BASE_URL}/review/queue/${reviewId}/decision`, {
-    method: 'POST',
-    headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    `${API_BASE_URL}/review/queue/${reviewId}/decision`,
+    {
+      method: "POST",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+  );
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to submit review decision: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to submit review decision: ${response.status} ${errorText}`,
+    );
   }
   return response.json();
 }
 
 export async function assignReviewItem(
   reviewId: string,
-  assignedTo: string
+  assignedTo: string,
 ): Promise<{ message: string }> {
-  const response = await fetch(`${API_BASE_URL}/review/queue/${reviewId}/assign`, {
-    method: 'PUT',
-    headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+  const response = await fetch(
+    `${API_BASE_URL}/review/queue/${reviewId}/assign`,
+    {
+      method: "PUT",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ assignedTo }),
     },
-    body: JSON.stringify({ assignedTo }),
-  });
+  );
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to assign review item: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to assign review item: ${response.status} ${errorText}`,
+    );
   }
   return response.json();
 }
@@ -1110,63 +1208,76 @@ export interface ReviewProgress {
   rejected?: number;
 }
 
-export async function getReviewProgress(contractId: string): Promise<ReviewProgress> {
+export async function getReviewProgress(
+  contractId: string,
+): Promise<ReviewProgress> {
   const response = await fetch(
     `${API_BASE_URL}/review/contracts/${contractId}/progress`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-API-Key': API_KEY,
-        'Content-Type': 'application/json',
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
       },
-    }
+    },
   );
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to fetch review progress: ${response.status} ${errorText}`);
+    throw new Error(
+      `Failed to fetch review progress: ${response.status} ${errorText}`,
+    );
   }
   return response.json();
 }
 
 export async function getReportingStats(): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/reporting/stats`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
-  if (!response.ok) throw new Error(`Failed to fetch stats: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`Failed to fetch stats: ${response.status}`);
   return response.json();
 }
 
 export async function getReportingExposure(clientName?: string): Promise<any> {
   const url = new URL(`${API_BASE_URL}/reporting/exposure`);
-  if (clientName) url.searchParams.append('clientName', clientName);
+  if (clientName) url.searchParams.append("clientName", clientName);
   const response = await fetch(url.toString(), {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'X-API-Key': API_KEY,
-      'Content-Type': 'application/json',
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
     },
   });
-  if (!response.ok) throw new Error(`Failed to fetch exposure: ${response.status}`);
+  if (!response.ok)
+    throw new Error(`Failed to fetch exposure: ${response.status}`);
   return response.json();
 }
 
 export async function exportPGs(
-  format: 'json' | 'csv',
-  filters?: { classification?: string; clientName?: string; reviewStatus?: string }
+  format: "json" | "csv",
+  filters?: {
+    classification?: string;
+    clientName?: string;
+    reviewStatus?: string;
+  },
 ): Promise<Blob> {
   const url = new URL(`${API_BASE_URL}/reporting/export`);
-  url.searchParams.append('format', format);
-  if (filters?.classification) url.searchParams.append('classification', filters.classification);
-  if (filters?.clientName) url.searchParams.append('clientName', filters.clientName);
-  if (filters?.reviewStatus) url.searchParams.append('reviewStatus', filters.reviewStatus);
+  url.searchParams.append("format", format);
+  if (filters?.classification)
+    url.searchParams.append("classification", filters.classification);
+  if (filters?.clientName)
+    url.searchParams.append("clientName", filters.clientName);
+  if (filters?.reviewStatus)
+    url.searchParams.append("reviewStatus", filters.reviewStatus);
 
   const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { 'X-API-Key': API_KEY },
+    method: "GET",
+    headers: { "X-API-Key": API_KEY },
   });
   if (!response.ok) throw new Error(`Export failed: ${response.status}`);
   return response.blob();
