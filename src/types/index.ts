@@ -1,4 +1,11 @@
-export type FileStatus = 'Completed' | 'Failed' | 'Processing' | 'Processed' | 'Pending Review' | 'Partially Reviewed' | 'Approved' | 'Rejected';
+export type FileStatus =
+  | 'Processing'
+  | 'Pending Review'
+  | 'In Review'
+  | 'Partially Reviewed'
+  | 'Approved for Storage'
+  | 'Blocked - Pending Action'
+  | 'Failed';
 
 export interface UploadedFile {
   id: string;

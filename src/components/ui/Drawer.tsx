@@ -52,7 +52,7 @@ export function Drawer({ open, title, onClose, children, width = 'w-[380px]' }: 
                 <XIcon className="h-4 w-4" />
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
           </motion.aside>
         </div>
       }

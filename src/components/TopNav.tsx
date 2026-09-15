@@ -21,29 +21,34 @@ export function TopNav() {
             className="h-10 w-10" />
 
           <span className="text-sm font-semibold text-navy-800">
-            NYL <span className="font-normal text-gray-400">-</span> QCoE PG
+            Quality Central
           </span>
         </div>
 
-        <nav className="ml-8 flex items-center gap-6 pr-4" aria-label="Main">
-          {links.map((link) =>
-          <NavLink
-            key={link.to}
-            to={link.to}
-            className={({ isActive }) =>
-            [
-            'border-b-2 pb-0.5 text-[13px] transition-colors duration-150 ease-out',
-            isActive ?
-            'border-navy-700 font-semibold text-navy-700' :
-            'border-transparent text-gray-500 hover:text-navy-700'].
-            join(' ')
-            }>
-            
-              {link.label}
-            </NavLink>
-          )}
-        </nav>
         <div className="ml-auto" />
+      </div>
+
+      <div className="w-full border-t border-gray-100">
+        <div className="mx-auto flex h-10 w-full max-w-[1400px] items-center px-4">
+          <nav className="flex items-center gap-6" aria-label="Main">
+            {links.map((link) =>
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={({ isActive }) =>
+              [
+              'border-b-2 pb-0.5 text-[13px] transition-colors duration-150 ease-out',
+              isActive ?
+              'border-navy-700 font-semibold text-navy-700' :
+              'border-transparent text-gray-500 hover:text-navy-700'].
+              join(' ')
+              }>
+              
+                {link.label}
+              </NavLink>
+            )}
+          </nav>
+        </div>
       </div>
     </header>);
 

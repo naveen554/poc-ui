@@ -835,6 +835,7 @@ export interface PerformanceGuarantee {
   volume_comparison_operator: string | null;
   volume_exception_notes: string | null;
   review_priority: number;
+  review_id?: string;
   matched_policies?: Array<{
     policy_number: string;
     product_line: string | null;
@@ -1067,13 +1068,28 @@ export interface ReviewQueueItem {
   contract_id: string;
   pg_record_id: string;
   pg_id: string;
-  client_name: string;
-  pg_sub_category: string;
-  classification: string;
-  review_priority: number;
-  review_status: string;
+  client_name: string | null;
+  pg_category: string | null;
+  pg_sub_category: string | null;
+  classification: string | null;
+  confidence_level: string | null;
+  confidence_score: string | null;
+  priority: number;
+  status: "PENDING" | "IN_REVIEW" | "COMPLETED";
   assigned_to: string | null;
+  assigned_at: string | null;
+  due_at: string | null;
+  escalation_sent: boolean;
+  decision_action: ReviewAction | null;
+  decision_at: string | null;
+  decision_by: string | null;
+  decision_comments: string | null;
+  submitted_by: string;
+  submitted_at: string;
+  completed_at: string | null;
+  is_deleted: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export async function listReviewQueue(params?: {
@@ -1123,9 +1139,24 @@ export async function listReviewQueue(params?: {
   return response.json();
 }
 
+export interface ReviewItemDetail {
+  reviewItem: ReviewQueueItem;
+  pgRecord: PerformanceGuarantee;
+  priorityExplanation: string;
+  editableFields: string[];
+  versionHistory: PGHistoryItem[];
+  contract: {
+    clientName: string;
+    policyNumbers: string[];
+    agreementPeriodStart: string;
+    agreementPeriodEnd: string;
+    totalAmountAtRisk: string | null;
+  };
+}
+
 export async function getReviewItem(
   reviewId: string,
-): Promise<ReviewQueueItem & { pg?: PerformanceGuarantee }> {
+): Promise<ReviewItemDetail> {
   const response = await fetch(`${API_BASE_URL}/review/queue/${reviewId}`, {
     method: "GET",
     headers: {
@@ -1150,10 +1181,22 @@ export interface ReviewDecisionPayload {
   editedFields?: Record<string, any> & { edit_reason?: string };
 }
 
+export interface ReviewDecisionResult {
+  message: string;
+  pgId: string;
+  contractId: string;
+  action: ReviewAction;
+  newVersion: number;
+  reviewedBy: string;
+  reviewedAt: string;
+  fieldsEdited: number;
+  contractStatus: string;
+}
+
 export async function submitReviewDecision(
   reviewId: string,
   payload: ReviewDecisionPayload,
-): Promise<{ message: string; review_status: string }> {
+): Promise<ReviewDecisionResult> {
   const response = await fetch(
     `${API_BASE_URL}/review/queue/${reviewId}/decision`,
     {
@@ -1177,7 +1220,7 @@ export async function submitReviewDecision(
 export async function assignReviewItem(
   reviewId: string,
   assignedTo: string,
-): Promise<{ message: string }> {
+): Promise<ReviewQueueItem> {
   const response = await fetch(
     `${API_BASE_URL}/review/queue/${reviewId}/assign`,
     {
@@ -1199,13 +1242,16 @@ export async function assignReviewItem(
 }
 
 export interface ReviewProgress {
-  total: number;
-  pending: number;
-  in_review: number;
-  approved: number;
-  approved_edits?: number;
-  approved_with_edits?: number;
-  rejected?: number;
+  contract_id: string;
+  client_name: string | null;
+  total_pgs: number;
+  overall_status: string;
+  total_pgs_check: number;
+  pending_count: number;
+  in_review_count: number;
+  approved_count: number;
+  approved_with_edits_count: number;
+  progress_pct: string;
 }
 
 export async function getReviewProgress(
@@ -1255,6 +1301,223 @@ export async function getReportingExposure(clientName?: string): Promise<any> {
   });
   if (!response.ok)
     throw new Error(`Failed to fetch exposure: ${response.status}`);
+  return response.json();
+}
+
+export interface Policy {
+  policy_id: string;
+  contract_id: string;
+  broker_producer: string;
+  client_name: string;
+  policy_number: string;
+  product_line: string | null;
+  effective_date: string | null;
+  end_date: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePolicyPayload {
+  broker_producer: string;
+  client_name: string;
+  policy_number: string;
+  product_line?: string | null;
+  effective_date: string;
+  end_date: string;
+  status?: string;
+}
+
+export async function createPolicy(
+  contractId: string,
+  payload: CreatePolicyPayload,
+): Promise<Policy> {
+  const response = await fetch(
+    `${API_BASE_URL}/contracts/${contractId}/policies`,
+    {
+      method: "POST",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to create policy: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function getPolicy(
+  contractId: string,
+  policyNumber: string,
+): Promise<Policy> {
+  const response = await fetch(
+    `${API_BASE_URL}/contracts/${contractId}/policies/${encodeURIComponent(policyNumber)}`,
+    {
+      method: "GET",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch policy: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export interface UpdatePolicyPayload {
+  broker_producer?: string;
+  client_name?: string;
+  product_line?: string | null;
+  effective_date?: string;
+  end_date?: string;
+  status?: string;
+}
+
+export async function updatePolicy(
+  contractId: string,
+  policyNumber: string,
+  payload: UpdatePolicyPayload,
+): Promise<Policy> {
+  const response = await fetch(
+    `${API_BASE_URL}/contracts/${contractId}/policies/${encodeURIComponent(policyNumber)}`,
+    {
+      method: "PUT",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to update policy: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function deletePolicy(
+  contractId: string,
+  policyNumber: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/contracts/${contractId}/policies/${encodeURIComponent(policyNumber)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "X-API-Key": API_KEY,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to delete policy: ${response.status} ${errorText}`);
+  }
+}
+
+export interface ManualPGPayload {
+  broker_producer: string;
+  client_name: string;
+  pg_category: string;
+  pg_sub_category: string;
+  product_line: string[];
+  performance_standard_text: string;
+  threshold_value: number | null;
+  threshold_unit: string | null;
+  threshold_direction: string | null;
+  threshold_qualifier?: string | null;
+  basis_of_measurement: string | null;
+  evaluation_method_text?: string | null;
+  evaluation_period: string | null;
+  reporting_cadence?: string | null;
+  penalty_cadence?: string | null;
+  penalty_allocation_percentage?: number | null;
+  penalty_type: string | null;
+  penalty_dollar_amount?: number | null;
+  penalty_tier_structure?: any[] | null;
+  minimum_volume_threshold?: number | null;
+  minimum_volume_fallback?: string | null;
+  volume_threshold_type?: string | null;
+  volume_comparison_operator?: string | null;
+  volume_exception_notes?: string | null;
+  pg_metric_name: string;
+  department?: string | null;
+  operational_area?: string | null;
+  metric_owner?: string | null;
+  source_system?: string | null;
+  results_source?: string | null;
+  metric_amount_at_risk?: number | null;
+  third_party_references?: any[];
+  amendment_flag?: boolean;
+  notes?: string | null;
+  policy_number: string;
+  classification: string;
+  classification_reason?: string | null;
+  deviation_details?: string | null;
+}
+
+export interface PGValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export async function validatePG(
+  contractId: string,
+  payload: ManualPGPayload,
+): Promise<PGValidationResult> {
+  const response = await fetch(
+    `${API_BASE_URL}/contracts/${contractId}/pgs/validate`,
+    {
+      method: "POST",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to validate PG: ${response.status} ${errorText}`);
+  }
+
+  return response.json();
+}
+
+export async function createPG(
+  contractId: string,
+  payload: ManualPGPayload,
+): Promise<PerformanceGuarantee> {
+  const response = await fetch(`${API_BASE_URL}/contracts/${contractId}/pgs`, {
+    method: "POST",
+    headers: {
+      "X-API-Key": API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to create PG: ${response.status} ${errorText}`);
+  }
+
   return response.json();
 }
 

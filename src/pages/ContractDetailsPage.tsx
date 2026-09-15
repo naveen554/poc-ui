@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, XCircleIcon, AlertCircleIcon, InfoIcon, EyeIcon, RefreshCwIcon, DownloadIcon, RotateCcwIcon, SaveIcon, FileTextIcon, BriefcaseIcon, Building2Icon, UploadCloudIcon, PhoneCallIcon, ClipboardListIcon, LinkIcon } from 'lucide-react';
-import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, listPoliciesForContract, getPGsByPolicy, updatePG, UpdatePGPayload, PerformanceGuarantee, PolicySummary, PGValidation, ContractValidation, ExtractionException, getContractHierarchy, ContractHierarchyResponse } from '../services/api';
+import { ChevronRightIcon, ChevronDownIcon, CheckCircle2Icon, XCircleIcon, AlertCircleIcon, InfoIcon, EyeIcon, RefreshCwIcon, DownloadIcon, RotateCcwIcon, SaveIcon, FileTextIcon, BriefcaseIcon, Building2Icon, UploadCloudIcon, PhoneCallIcon, ClipboardListIcon, LinkIcon, PlusIcon, Trash2Icon, ShieldCheckIcon, CheckCheckIcon, ClockIcon, UserIcon, HistoryIcon, SendIcon } from 'lucide-react';
+import { getContractDetails, getContractPipelineStatus, constructS3DocumentUrl, getPGsByContract, listPoliciesForContract, getPGsByPolicy, updatePG, UpdatePGPayload, PerformanceGuarantee, PolicySummary, PGValidation, ContractValidation, ExtractionException, getContractHierarchy, ContractHierarchyResponse, createPolicy, CreatePolicyPayload, deletePolicy, validatePG, createPG, ManualPGPayload, PGValidationResult, submitReviewDecision, getPGDetail, listReviewQueue, getReviewItem, ReviewItemDetail, ReviewAction, PGHistoryItem } from '../services/api';
+import { Drawer } from '../components/ui/Drawer';
 import { ContractDetails } from '../services/api';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Loader } from '../components/ui/Loader';
@@ -61,6 +62,10 @@ export function ContractDetailsPage() {
   const [pgTab, setPgTab] = useState<PGTabKey>('all');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const [showAddPolicy, setShowAddPolicy] = useState(false);
+  const [showAddPG, setShowAddPG] = useState(false);
+  const [deletingPolicy, setDeletingPolicy] = useState<string | null>(null);
+  const [reviewDrawerPg, setReviewDrawerPg] = useState<PerformanceGuarantee | null>(null);
   const showPerformanceGuarantees = getFeatureFlag(FeatureFlagKeys.PERFORMANCE_GUARANTEE);
   const showReviewProgress = getFeatureFlag(FeatureFlagKeys.REVIEW_PROGRESS);
   const showExtractionExceptions = getFeatureFlag(FeatureFlagKeys.EXTRACTION_EXCEPTIONS);
@@ -247,6 +252,192 @@ export function ContractDetailsPage() {
     }
   };
 
+  const applyPgUpdate = (pgRecordId: string, updated: PerformanceGuarantee) => {
+    setPgs((prev) => prev.map((p) => (p.pg_record_id === pgRecordId ? updated : p)));
+    setPgsByPolicy((prev) => {
+      const next: Record<string, PerformanceGuarantee[]> = {};
+      for (const [policy, list] of Object.entries(prev)) {
+        next[policy] = list.map((p) => (p.pg_record_id === pgRecordId ? updated : p));
+      }
+      return next;
+    });
+  };
+
+  // Some PG list endpoints omit review_id even when a review exists; resolve it on demand.
+  const resolveReviewId = async (pg: PerformanceGuarantee): Promise<string | null> => {
+    if (pg.review_id) return pg.review_id;
+    try {
+      const result = await listReviewQueue({ contractId: fileId, limit: 200 });
+      const match = result.items.find((item) => item.pg_record_id === pg.pg_record_id);
+      return match?.review_id ?? null;
+    } catch (err) {
+      console.error('Failed to resolve review id for PG:', err);
+      return null;
+    }
+  };
+
+  const handleApprovePG = async (
+    pg: PerformanceGuarantee,
+    payload: Partial<UpdatePGPayload>,
+    comments: string,
+    isDirty: boolean,
+  ): Promise<PerformanceGuarantee | null> => {
+    const reviewId = await resolveReviewId(pg);
+    if (!reviewId) {
+      setToast({ message: 'No pending review found for this PG', type: 'error' });
+      return null;
+    }
+    try {
+      const editedFields = isDirty
+        ? {
+            ...payload,
+            edit_reason: comments || 'Corrected before approving',
+          }
+        : undefined;
+      await submitReviewDecision(reviewId, {
+        action: 'APPROVE',
+        comments: comments || 'Reviewed - AI extraction is accurate',
+        editedFields,
+      });
+      const refreshed = await getPGDetail(fileId, pg.pg_id);
+      applyPgUpdate(pg.pg_record_id, refreshed);
+      setToast({
+        message: `${pg.pg_sub_category || pg.pg_id} approved successfully`,
+        type: 'success',
+      });
+      return refreshed;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to approve PG';
+      setToast({ message, type: 'error' });
+      return null;
+    }
+  };
+
+  const handleReviewDecision = async (
+    pg: PerformanceGuarantee,
+    action: ReviewAction,
+    comments: string,
+  ): Promise<PerformanceGuarantee | null> => {
+    const reviewId = await resolveReviewId(pg);
+    if (!reviewId) {
+      setToast({ message: 'No pending review found for this PG', type: 'error' });
+      return null;
+    }
+    try {
+      await submitReviewDecision(reviewId, { action, comments });
+      const refreshed = await getPGDetail(fileId, pg.pg_id);
+      applyPgUpdate(pg.pg_record_id, refreshed);
+      const verb = action === 'APPROVE' ? 'approved' : action === 'REJECT' ? 'rejected' : 'sent back for changes';
+      setToast({ message: `${pg.pg_sub_category || pg.pg_id} ${verb}`, type: 'success' });
+      return refreshed;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to submit review decision';
+      setToast({ message, type: 'error' });
+      return null;
+    }
+  };
+
+  // Reload contract-level counters and policy summaries after a policy or PG mutation.
+  // Expands the broker/client/policy tree (hierarchy view) and the flat-view key
+  // for a given policy number, so a newly created policy/PG is visible without
+  // the user having to manually drill down.
+  const revealPolicyInSections = (hierarchy: ContractHierarchyResponse, policyNumber: string) => {
+    setOpenSections((prev) => {
+      const next = { ...prev, [`policy:${policyNumber}`]: true };
+      hierarchy.items.forEach((brokerItem, brokerIdx) => {
+        const brokerKey = `broker:${brokerIdx}`;
+        brokerItem.clients.forEach((client, clientIdx) => {
+          const clientKey = `${brokerKey}:client:${clientIdx}`;
+          const hasPolicy = client.contracts.some((c) => c.policy_numbers?.includes(policyNumber));
+          if (hasPolicy) {
+            next[brokerKey] = true;
+            next[clientKey] = true;
+            next[`${clientKey}:policy:${policyNumber}`] = true;
+          }
+        });
+      });
+      return next;
+    });
+  };
+
+  const refreshRelatedData = async (revealPolicyNumber?: string, policyNumberToReloadPGs?: string) => {
+    let contractData: ContractDetails | null = null;
+    try {
+      contractData = await getContractDetails(fileId);
+      setContract(contractData);
+    } catch (err) {
+      console.error('Failed to refresh contract after mutation:', err);
+    }
+    try {
+      const hierarchy = await getContractHierarchy(fileId);
+      setHierarchyData(hierarchy);
+      if (revealPolicyNumber) revealPolicyInSections(hierarchy, revealPolicyNumber);
+    } catch (err) {
+      console.error('Failed to refresh hierarchy after mutation:', err);
+    }
+    try {
+      const { summaries, hasHierarchy } = await loadPolicyList(fileId, contractData?.policy_numbers ?? []);
+      setPolicySummaries(summaries);
+      setUsesPolicyHierarchy(hasHierarchy);
+    } catch (err) {
+      console.error('Failed to refresh policy summaries after mutation:', err);
+    }
+    if (policyNumberToReloadPGs) {
+      try {
+        const list = await getPGsByPolicy(fileId, policyNumberToReloadPGs);
+        setPgsByPolicy((prev) => ({ ...prev, [policyNumberToReloadPGs]: list }));
+        setPgs((prev) => {
+          const seen = new Set<string>();
+          const merged: PerformanceGuarantee[] = [];
+          for (const p of prev) {
+            if (p.pg_record_id !== undefined && !seen.has(p.pg_record_id) ) {
+              if (list.some((l) => l.pg_record_id === p.pg_record_id)) continue;
+              seen.add(p.pg_record_id);
+              merged.push(p);
+            }
+          }
+          for (const l of list) merged.push(l);
+          return merged;
+        });
+      } catch (err) {
+        console.error(`Failed to reload PGs for policy ${policyNumberToReloadPGs}:`, err);
+      }
+    }
+  };
+
+  const handlePolicyCreated = async (policyNumber: string) => {
+    setShowAddPolicy(false);
+    setToast({ message: `Policy ${policyNumber} created successfully`, type: 'success' });
+    await refreshRelatedData(policyNumber);
+  };
+
+  const handlePGCreated = async (policyNumber: string, pgId: string) => {
+    setShowAddPG(false);
+    setToast({ message: `${pgId} created successfully`, type: 'success' });
+    await refreshRelatedData(policyNumber, policyNumber);
+  };
+
+  const handleDeletePolicy = async (policyNumber: string) => {
+    if (!window.confirm(`Delete policy ${policyNumber}? This cannot be undone.`)) return;
+    setDeletingPolicy(policyNumber);
+    try {
+      await deletePolicy(fileId, policyNumber);
+      setToast({ message: `Policy ${policyNumber} deleted`, type: 'success' });
+      setPolicySummaries((prev) => prev.filter((p) => p.policy_number !== policyNumber));
+      setPgsByPolicy((prev) => {
+        const next = { ...prev };
+        delete next[policyNumber];
+        return next;
+      });
+      await refreshRelatedData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete policy';
+      setToast({ message, type: 'error' });
+    } finally {
+      setDeletingPolicy(null);
+    }
+  };
+
   if (loading) {
     return <Loader />;
   }
@@ -306,18 +497,62 @@ export function ContractDetailsPage() {
   const isNonStandard = (c: string) => c === 'NON_STANDARD' || c === 'NON-STD' || c === 'NONSTANDARD';
   const isCustom = (c: string) => c === 'CUSTOM' || c === 'CUSTOM_NEW';
 
-  const pgCounts = {
-    all: totalPgs,
-    standard: pgs.filter(pg => isStandard(pg.classification)).length,
-    nonStandard: pgs.filter(pg => isNonStandard(pg.classification)).length,
-    custom: pgs.filter(pg => isCustom(pg.classification)).length,
-  };
+  // Under the policy-hierarchy view, `pgs` only fills in as each policy is expanded/lazy-loaded,
+  // so it under-reports (shows 0) right after load. Fall back to the contract-level totals
+  // (already available from the initial contract fetch) until any PG has actually been loaded.
+  const pgCounts = pgs.length > 0 || !usesPolicyHierarchy
+    ? {
+        all: totalPgs,
+        standard: pgs.filter(pg => isStandard(pg.classification)).length,
+        nonStandard: pgs.filter(pg => isNonStandard(pg.classification)).length,
+        custom: pgs.filter(pg => isCustom(pg.classification)).length,
+      }
+    : {
+        all: contract.total_pgs ?? 0,
+        standard: contract.standard_count ?? 0,
+        nonStandard: contract.non_standard_count ?? 0,
+        custom: contract.custom_new_count ?? 0,
+      };
 
   const policyList = policySummaries.length > 0
     ? policySummaries.map((p) => p.policy_number)
     : (contract.policy_numbers && contract.policy_numbers.length > 0
       ? contract.policy_numbers
       : ['(No Policy Number)']);
+
+  // Broker -> Client hierarchy for this contract, so Add Policy/Add PG offer real choices instead of a single locked value.
+  // Always seed with the contract's own broker/client first, since the hierarchy API can be missing, empty,
+  // or use slightly different casing/whitespace — without this the Client dropdown can render blank.
+  const brokerClientOptions: { broker: string; clients: string[] }[] = (() => {
+    const map = new Map<string, Set<string>>();
+    const addPair = (broker?: string | null, client?: string | null) => {
+      const b = (broker || '').trim();
+      if (!b) return;
+      if (!map.has(b)) map.set(b, new Set());
+      const c = (client || '').trim();
+      if (c) map.get(b)!.add(c);
+    };
+
+    addPair(contract.broker_producer, contract.client_name);
+
+    if (hierarchyData && hierarchyData.items.length > 0) {
+      for (const item of hierarchyData.items) {
+        if (item.clients.length === 0) {
+          addPair(item.broker, null);
+        }
+        for (const c of item.clients) {
+          addPair(item.broker, c.client_name);
+        }
+      }
+    }
+
+    if (map.size === 0) map.set('Unknown', new Set(['Unknown']));
+
+    return Array.from(map.entries()).map(([broker, clients]) => ({
+      broker,
+      clients: clients.size > 0 ? Array.from(clients) : ['Unknown'],
+    }));
+  })();
 
   const policySections = policyList.map((policyNumber) => {
     const policyPgs = pgsByPolicy[policyNumber] ?? [];
@@ -404,44 +639,67 @@ export function ContractDetailsPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1 border-b border-gray-200">
-        <button
-          type="button"
-          onClick={() => setMainTab('contract')}
-          className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${
-            mainTab === 'contract'
-              ? 'text-navy-700 border-navy-700'
-              : 'text-gray-500 border-transparent hover:text-navy-700'
-          }`}
-        >
-          Contract Information
-        </button>
+      <div className="flex items-center justify-between gap-2 border-b border-gray-200">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setMainTab('contract')}
+            className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${
+              mainTab === 'contract'
+                ? 'text-navy-700 border-navy-700'
+                : 'text-gray-500 border-transparent hover:text-navy-700'
+            }`}
+          >
+            Contract Information
+          </button>
+          {showPerformanceGuarantees && (
+            <button
+              type="button"
+              onClick={() => setMainTab('pgs')}
+              className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${
+                mainTab === 'pgs'
+                  ? 'text-navy-700 border-navy-700'
+                  : 'text-gray-500 border-transparent hover:text-navy-700'
+              }`}
+            >
+              PGs {pgs.length > 0 && <span className="ml-1 text-gray-400">({pgs.length})</span>}
+            </button>
+          )}
+          {showOperationalData && (
+            <button
+              type="button"
+              onClick={() => setMainTab('operational')}
+              className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${
+                mainTab === 'operational'
+                  ? 'text-navy-700 border-navy-700'
+                  : 'text-gray-500 border-transparent hover:text-navy-700'
+              }`}
+            >
+              Operational Data
+              <span className="ml-1.5 inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 uppercase tracking-wide align-middle">Preview</span>
+            </button>
+          )}
+        </div>
         {showPerformanceGuarantees && (
-          <button
-            type="button"
-            onClick={() => setMainTab('pgs')}
-            className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${
-              mainTab === 'pgs'
-                ? 'text-navy-700 border-navy-700'
-                : 'text-gray-500 border-transparent hover:text-navy-700'
-            }`}
-          >
-            PGs {pgs.length > 0 && <span className="ml-1 text-gray-400">({pgs.length})</span>}
-          </button>
-        )}
-        {showOperationalData && (
-          <button
-            type="button"
-            onClick={() => setMainTab('operational')}
-            className={`px-4 py-2 text-[13px] font-semibold transition-colors border-b-2 -mb-px ${
-              mainTab === 'operational'
-                ? 'text-navy-700 border-navy-700'
-                : 'text-gray-500 border-transparent hover:text-navy-700'
-            }`}
-          >
-            Operational Data
-            <span className="ml-1.5 inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 uppercase tracking-wide align-middle">Preview</span>
-          </button>
+          <div className="flex items-center gap-2 pb-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAddPolicy(true)}
+              className="inline-flex items-center gap-1.5 rounded bg-navy-700 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-navy-800"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Add Policy
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddPG(true)}
+              disabled={policyList.length === 0}
+              className="inline-flex items-center gap-1.5 rounded bg-navy-700 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Add PG
+            </button>
+          </div>
         )}
       </div>
 
@@ -523,24 +781,7 @@ export function ContractDetailsPage() {
           </div>
 
           {contract.contract_validations && contract.contract_validations.length > 0 && (
-            <div className="rounded-md border border-gray-200 bg-white shadow-sm">
-              <div className="flex h-9 items-center justify-between bg-navy-700 px-3 text-white">
-                <h2 className="text-[13px] font-semibold">Contract Validations ({contract.contract_validations.length})</h2>
-                <div className="flex items-center gap-2 text-[11px]">
-                  {contract.contract_validation_failures > 0 && (
-                    <span className="rounded bg-red-600 px-1.5 py-0.5 font-bold">{contract.contract_validation_failures} Failed</span>
-                  )}
-                  {contract.contract_validation_warnings > 0 && (
-                    <span className="rounded bg-amber-500 px-1.5 py-0.5 font-bold">{contract.contract_validation_warnings} Warnings</span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 p-4">
-                {contract.contract_validations.map((v, i) => (
-                  <ValidationCard key={`${v.rule_id}-${i}`} validation={v} />
-                ))}
-              </div>
-            </div>
+            <ContractValidationsPanel validations={contract.contract_validations} />
           )}
 
           {showExtractionExceptions && contract.extraction_exceptions && contract.extraction_exceptions.length > 0 && (
@@ -577,7 +818,7 @@ export function ContractDetailsPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 px-1 py-1">
+          <div className="flex items-center gap-2 py-1">
             {pgTabs.map((tab) => {
               const active = pgTab === tab.key;
               const count = pgCounts[tab.key];
@@ -658,7 +899,11 @@ export function ContractDetailsPage() {
                           </button>
                           
                           {isClientOpen && client.contracts.map((contractItem, contractIdx) => {
-                            const policyNumbers = contractItem.policy_numbers || [];
+                            // The hierarchy API's policy_numbers only reflects the contract's originally
+                            // extracted policies and doesn't include policies added later via Add Policy.
+                            // Prefer the dedicated Policies API list (policyList/policySummaries), which
+                            // is refreshed after every Add/Delete Policy call, so counts stay accurate.
+                            const policyNumbers = policyList.length > 0 ? policyList : (contractItem.policy_numbers || []);
                             
                             return (
                               <div key={contractIdx} className="bg-gray-50/60 px-5 py-4 border-t border-gray-200">
@@ -707,21 +952,23 @@ export function ContractDetailsPage() {
                                     
                                     return (
                                       <div key={policyKey} className="rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            toggleSection(policyKey);
-                                            ensurePolicyPGsLoaded(policyNumber);
-                                          }}
-                                          className="w-full flex items-center gap-3 bg-navy-600 px-4 py-2.5 text-left text-white transition-colors hover:bg-navy-700"
-                                        >
-                                          <ChevronDownIcon className={`h-4 w-4 shrink-0 transition-transform ${isPolicyOpen ? '' : '-rotate-90'}`} />
-                                          <FileTextIcon className="h-4 w-4 shrink-0" />
-                                          <div className="flex flex-col leading-tight min-w-0">
-                                            <span className="text-[10px] uppercase tracking-wide text-white/70">Policy Number</span>
-                                            <span className="text-[13px] font-mono font-semibold truncate">{policyNumber}</span>
-                                          </div>
-                                          <span className="ml-auto inline-flex items-center gap-2">
+                                        <div className="w-full flex items-center gap-3 bg-navy-600 px-4 py-2.5 text-white">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              toggleSection(policyKey);
+                                              ensurePolicyPGsLoaded(policyNumber);
+                                            }}
+                                            className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                                          >
+                                            <ChevronDownIcon className={`h-4 w-4 shrink-0 transition-transform ${isPolicyOpen ? '' : '-rotate-90'}`} />
+                                            <FileTextIcon className="h-4 w-4 shrink-0" />
+                                            <div className="flex flex-col leading-tight min-w-0">
+                                              <span className="text-[10px] uppercase tracking-wide text-white/70">Policy Number</span>
+                                              <span className="text-[13px] font-mono font-semibold truncate">{policyNumber}</span>
+                                            </div>
+                                          </button>
+                                          <span className="inline-flex items-center gap-2 shrink-0">
                                             {summary && (summary.pending_review > 0) && (
                                               <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                                                 {summary.pending_review} Pending
@@ -732,8 +979,17 @@ export function ContractDetailsPage() {
                                                 {summary.approved} Approved
                                               </span>
                                             )}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDeletePolicy(policyNumber)}
+                                              disabled={deletingPolicy === policyNumber}
+                                              title="Delete Policy"
+                                              className="inline-flex items-center rounded border border-white/40 bg-white/10 p-1.5 text-white transition-colors hover:bg-red-500/80 disabled:opacity-50"
+                                            >
+                                              <Trash2Icon className="h-3.5 w-3.5" />
+                                            </button>
                                           </span>
-                                        </button>
+                                        </div>
                                         
                                         {isPolicyOpen && (
                                           <div className="flex flex-col gap-4 p-4 bg-gray-50/60">
@@ -774,6 +1030,8 @@ export function ContractDetailsPage() {
                                                             key={`${product}:${pg.pg_record_id}`}
                                                             pg={pg}
                                                             onSave={(payload) => handleSavePG(pg, payload)}
+                                                            onApprove={(payload, comments, isDirty) => handleApprovePG(pg, payload, comments, isDirty)}
+                                                            onOpenReview={(pg) => setReviewDrawerPg(pg)}
                                                             isStandard={isStandard}
                                                             isNonStandard={isNonStandard}
                                                             isCustom={isCustom}
@@ -815,18 +1073,20 @@ export function ContractDetailsPage() {
                 const summaryTotal = section.summary?.total_pgs ?? section.summary?.pg_count ?? section.pgs.length;
                 return (
                   <div key={section.key} className="rounded-md border border-gray-200 bg-white shadow-sm overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePolicy(section.key)}
-                      className="w-full flex items-center gap-3 bg-navy-700 px-4 py-2.5 text-left text-white transition-colors hover:bg-navy-800"
-                    >
-                      <ChevronDownIcon className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
-                      <FileTextIcon className="h-4 w-4 shrink-0" />
-                      <div className="flex flex-col leading-tight min-w-0">
-                        <span className="text-[10px] uppercase tracking-wide text-white/70">Policy</span>
-                        <span className="text-[13px] font-mono font-semibold truncate">{section.label}</span>
-                      </div>
-                      <span className="ml-auto inline-flex items-center gap-2">
+                    <div className="w-full flex items-center gap-3 bg-navy-700 px-4 py-2.5 text-white">
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePolicy(section.key)}
+                        className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                      >
+                        <ChevronDownIcon className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                        <FileTextIcon className="h-4 w-4 shrink-0" />
+                        <div className="flex flex-col leading-tight min-w-0">
+                          <span className="text-[10px] uppercase tracking-wide text-white/70">Policy</span>
+                          <span className="text-[13px] font-mono font-semibold truncate">{section.label}</span>
+                        </div>
+                      </button>
+                      <span className="inline-flex items-center gap-2 shrink-0">
                         {section.summary && (section.summary.pending_review > 0) && (
                           <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                             {section.summary.pending_review} Pending
@@ -837,8 +1097,17 @@ export function ContractDetailsPage() {
                             {section.summary.approved} Approved
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePolicy(section.key)}
+                          disabled={deletingPolicy === section.key}
+                          title="Delete Policy"
+                          className="inline-flex items-center rounded border border-white/40 bg-white/10 p-1.5 text-white transition-colors hover:bg-red-500/80 disabled:opacity-50"
+                        >
+                          <Trash2Icon className="h-3.5 w-3.5" />
+                        </button>
                       </span>
-                    </button>
+                    </div>
                     {isOpen && (
                       <div className="flex flex-col gap-4 p-4 bg-gray-50/60">
                         {isLoading ? (
@@ -878,6 +1147,8 @@ export function ContractDetailsPage() {
                                         key={`${product}:${pg.pg_record_id}`}
                                         pg={pg}
                                         onSave={(payload) => handleSavePG(pg, payload)}
+                                        onApprove={(payload, comments, isDirty) => handleApprovePG(pg, payload, comments, isDirty)}
+                                        onOpenReview={(pg) => setReviewDrawerPg(pg)}
                                         isStandard={isStandard}
                                         isNonStandard={isNonStandard}
                                         isCustom={isCustom}
@@ -948,6 +1219,40 @@ export function ContractDetailsPage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      <AddPolicyDialog
+        open={showAddPolicy}
+        onClose={() => setShowAddPolicy(false)}
+        contractId={fileId}
+        brokerClientOptions={brokerClientOptions}
+        defaultBroker={(contract.broker_producer || '').trim()}
+        defaultClientName={(contract.client_name || '').trim()}
+        onCreated={handlePolicyCreated}
+        onError={(message) => setToast({ message, type: 'error' })}
+      />
+
+      <AddPGDialog
+        open={showAddPG}
+        onClose={() => setShowAddPG(false)}
+        contractId={fileId}
+        policyOptions={policyList.map((pn) => ({
+          policy_number: pn,
+          product_line: policySummaries.find((p) => p.policy_number === pn)?.product_line ?? null,
+        }))}
+        brokerClientOptions={brokerClientOptions}
+        defaultBroker={(contract.broker_producer || '').trim()}
+        defaultClientName={(contract.client_name || '').trim()}
+        onCreated={handlePGCreated}
+        onError={(message) => setToast({ message, type: 'error' })}
+      />
+
+      <PGReviewDrawer
+        open={reviewDrawerPg !== null}
+        onClose={() => setReviewDrawerPg(null)}
+        pg={reviewDrawerPg}
+        resolveReviewId={resolveReviewId}
+        onDecision={(pg, action, comments) => handleReviewDecision(pg, action, comments)}
+      />
     </div>
   );
 }
@@ -955,6 +1260,8 @@ export function ContractDetailsPage() {
 function PGEditor({
   pg,
   onSave,
+  onApprove,
+  onOpenReview,
   isStandard,
   isNonStandard,
   isCustom,
@@ -962,6 +1269,8 @@ function PGEditor({
 }: {
   pg: PerformanceGuarantee;
   onSave: (payload: UpdatePGPayload) => Promise<PerformanceGuarantee | null>;
+  onApprove: (payload: Partial<UpdatePGPayload>, comments: string, isDirty: boolean) => Promise<PerformanceGuarantee | null>;
+  onOpenReview: (pg: PerformanceGuarantee) => void;
   isStandard: (c: string) => boolean;
   isNonStandard: (c: string) => boolean;
   isCustom: (c: string) => boolean;
@@ -981,6 +1290,7 @@ function PGEditor({
   const [original, setOriginal] = useState(() => buildInitial(pg));
   const [form, setForm] = useState(() => buildInitial(pg));
   const [saving, setSaving] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -1007,25 +1317,52 @@ function PGEditor({
     setForm(original);
   };
 
+  const buildUpdatePayload = (): UpdatePGPayload => ({
+    threshold_value: form.threshold_value === '' ? null : isNaN(Number(form.threshold_value)) ? String(form.threshold_value) : Number(form.threshold_value),
+    threshold_unit: form.threshold_unit || null,
+    basis_of_measurement: form.basis_of_measurement || null,
+    notes: form.notes || null,
+    penalty_allocation_percentage: form.penalty_allocation_percentage === '' ? null : Number(form.penalty_allocation_percentage),
+    classification: form.classification || null,
+    classification_reason: form.classification_reason || null,
+    comments: form.comments || null,
+  });
+
+  // Only the fields whose value differs from the loaded PG — this is what gets recorded
+  // as analyst_edits on the review, so it must not include untouched fields.
+  const buildChangedPayload = (): Partial<UpdatePGPayload> => {
+    const full = buildUpdatePayload();
+    const changed: Partial<UpdatePGPayload> = {};
+    (Object.keys(full) as (keyof UpdatePGPayload)[]).forEach((key) => {
+      if (key === 'comments') return;
+      if (String(form[key as keyof typeof form] ?? '') !== String(original[key as keyof typeof original] ?? '')) {
+        (changed as any)[key] = full[key];
+      }
+    });
+    return changed;
+  };
+
   const handleSave = async () => {
     setSaving(true);
-    const payload: UpdatePGPayload = {
-      threshold_value: form.threshold_value === '' ? null : isNaN(Number(form.threshold_value)) ? String(form.threshold_value) : Number(form.threshold_value),
-      threshold_unit: form.threshold_unit || null,
-      basis_of_measurement: form.basis_of_measurement || null,
-      notes: form.notes || null,
-      penalty_allocation_percentage: form.penalty_allocation_percentage === '' ? null : Number(form.penalty_allocation_percentage),
-      classification: form.classification || null,
-      classification_reason: form.classification_reason || null,
-      comments: form.comments || null,
-    };
-    const updated = await onSave(payload);
+    const updated = await onSave(buildUpdatePayload());
     if (updated) {
       const next = buildInitial(updated);
       setOriginal(next);
       setForm(next);
     }
     setSaving(false);
+  };
+
+  const handleApprove = async () => {
+    setApproving(true);
+    const changed = buildChangedPayload();
+    const updated = await onApprove(changed, form.comments, Object.keys(changed).length > 0);
+    if (updated) {
+      const next = buildInitial(updated);
+      setOriginal(next);
+      setForm(next);
+    }
+    setApproving(false);
   };
 
   const classificationValue = String(form.classification || '').toUpperCase();
@@ -1044,34 +1381,45 @@ function PGEditor({
 
   return (
     <div className={`rounded-md border ${isDirty ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-200'} bg-white shadow-sm overflow-hidden`}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
-      >
-        <ChevronDownIcon className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${open ? '' : '-rotate-90'}`} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-mono font-semibold text-navy-700 bg-navy-50 rounded px-1.5 py-0.5">{pg.pg_id}</span>
-            <span className="text-[13px] font-semibold text-navy-800 truncate">{pg.pg_sub_category || pg.pg_metric_name || 'Performance Guarantee'}</span>
-            {isDirty && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                <AlertCircleIcon className="h-3 w-3" />
-                Unsaved
-              </span>
-            )}
+      <div className="w-full flex items-center gap-3 px-4 py-2.5">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex flex-1 min-w-0 items-center gap-3 text-left"
+        >
+          <ChevronDownIcon className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${open ? '' : '-rotate-90'}`} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-mono font-semibold text-navy-700 bg-navy-50 rounded px-1.5 py-0.5">{pg.pg_id}</span>
+              <span className="text-[13px] font-semibold text-navy-800 truncate">{pg.pg_sub_category || pg.pg_metric_name || 'Performance Guarantee'}</span>
+              {isDirty && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                  <AlertCircleIcon className="h-3 w-3" />
+                  Unsaved
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+              <span>Confidence: <span className="font-semibold text-gray-700">{confidenceValue ? confidenceValue.toFixed(2) : '—'}</span></span>
+            </div>
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
-            <span>Confidence: <span className="font-semibold text-gray-700">{confidenceValue ? confidenceValue.toFixed(2) : '—'}</span></span>
-          </div>
-        </div>
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${classificationTone}`}>
+        </button>
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0 ${classificationTone}`}>
           {classificationValue || 'UNCLASSIFIED'}
         </span>
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusColor}`}>
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0 ${statusColor}`}>
           {reviewStatus}
         </span>
-      </button>
+        <button
+          type="button"
+          onClick={() => onOpenReview(pg)}
+          title="Open review drawer (version history & decision)"
+          className="inline-flex items-center gap-1 rounded border border-navy-200 bg-navy-50 px-2 py-1 text-[11px] font-semibold text-navy-700 shrink-0 transition-colors hover:bg-navy-100"
+        >
+          <SendIcon className="h-3.5 w-3.5" />
+          Review
+        </button>
+      </div>
 
       {open && (
         <div className="border-t border-gray-200 bg-gray-50/50 px-4 py-4">
@@ -1165,7 +1513,7 @@ function PGEditor({
             <button
               type="button"
               onClick={handleRevert}
-              disabled={!isDirty || saving}
+              disabled={!isDirty || saving || approving}
               className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RotateCcwIcon className="h-3.5 w-3.5" />
@@ -1174,11 +1522,20 @@ function PGEditor({
             <button
               type="button"
               onClick={handleSave}
-              disabled={!isDirty || saving}
+              disabled={!isDirty || saving || approving}
               className="inline-flex items-center gap-1.5 rounded bg-navy-700 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <SaveIcon className="h-3.5 w-3.5" />
-              {saving ? 'Saving…' : 'Save Changes'}
+              {saving ? 'Saving…' : 'Save as Draft'}
+            </button>
+            <button
+              type="button"
+              onClick={handleApprove}
+              disabled={saving || approving}
+              className="inline-flex items-center gap-1.5 rounded bg-green-700 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCheckIcon className="h-3.5 w-3.5" />
+              {approving ? 'Approving…' : 'Save & Approve'}
             </button>
           </div>
 
@@ -1198,11 +1555,12 @@ function PGEditor({
   );
 }
 
-function FormField({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+function FormField({ label, children, className = '', error }: { label: string; children: React.ReactNode; className?: string; error?: string }) {
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
       <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{label}</label>
       {children}
+      {error && <span className="text-[11px] font-medium text-red-600">{error}</span>}
     </div>
   );
 }
@@ -1453,6 +1811,104 @@ function LinkageRow({ left, right }: { left: string; right: string }) {
   );
 }
 
+type ValidationGroupKey = 'FAIL' | 'WARN' | 'INFO' | 'PASS';
+
+const VALIDATION_GROUPS: {
+  key: ValidationGroupKey;
+  label: string;
+  matches: (status: string) => boolean;
+  badge: string;
+  header: string;
+  border: string;
+  icon: React.ReactNode;
+}[] = [
+  { key: 'PASS', label: 'Passed', matches: (s) => s === 'PASS', badge: 'bg-green-600', header: 'bg-green-50 text-green-900 hover:bg-green-100', border: 'border-green-200', icon: <CheckCircle2Icon className="h-4 w-4 text-green-600" /> },
+  // SKIP is informational too — nothing was evaluated, nothing failed.
+  { key: 'INFO', label: 'Info', matches: (s) => s === 'INFO' || s === 'SKIP', badge: 'bg-blue-600', header: 'bg-blue-50 text-blue-900 hover:bg-blue-100', border: 'border-blue-200', icon: <InfoIcon className="h-4 w-4 text-blue-600" /> },
+  { key: 'WARN', label: 'Warnings', matches: (s) => s === 'WARN', badge: 'bg-amber-500', header: 'bg-amber-50 text-amber-900 hover:bg-amber-100', border: 'border-amber-200', icon: <AlertCircleIcon className="h-4 w-4 text-amber-600" /> },
+  { key: 'FAIL', label: 'Failed', matches: (s) => s === 'FAIL', badge: 'bg-red-600', header: 'bg-red-50 text-red-900 hover:bg-red-100', border: 'border-red-200', icon: <XCircleIcon className="h-4 w-4 text-red-600" /> },
+];
+
+function ContractValidationsPanel({ validations }: { validations: ContractValidation[] }) {
+  const groups = VALIDATION_GROUPS
+    .map((g) => ({ ...g, items: validations.filter((v) => g.matches(v.status)) }))
+    .filter((g) => g.items.length > 0);
+
+  // Problems open by default so they're seen first; passed/info start collapsed.
+  const [openGroups, setOpenGroups] = useState<Set<ValidationGroupKey>>(
+    () => new Set(groups.filter((g) => g.key === 'FAIL' || g.key === 'WARN').map((g) => g.key)),
+  );
+  const sectionRefs = useRef<Partial<Record<ValidationGroupKey, HTMLDivElement | null>>>({});
+
+  const toggleGroup = (key: ValidationGroupKey) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // Header badge: open that group (if closed) and scroll to it.
+  const jumpToGroup = (key: ValidationGroupKey) => {
+    setOpenGroups((prev) => new Set(prev).add(key));
+    requestAnimationFrame(() => {
+      sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  return (
+    <div className="rounded-md border border-gray-200 bg-white shadow-sm">
+      <div className="flex h-9 items-center justify-between bg-navy-700 px-3 text-white">
+        <h2 className="text-[13px] font-semibold">Contract Validations ({validations.length})</h2>
+        <div className="flex items-center gap-2 text-[11px]">
+          {groups.map((g) => (
+            <button
+              key={g.key}
+              type="button"
+              onClick={() => jumpToGroup(g.key)}
+              title={`Jump to ${g.label}`}
+              className={`rounded px-1.5 py-0.5 font-bold transition-opacity hover:opacity-85 ${g.badge}`}
+            >
+              {g.items.length} {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 p-4">
+        {groups.map((g) => {
+          const isOpen = openGroups.has(g.key);
+          return (
+            <div
+              key={g.key}
+              ref={(el) => { sectionRefs.current[g.key] = el; }}
+              className={`rounded-md border ${g.border} overflow-hidden scroll-mt-4`}
+            >
+              <button
+                type="button"
+                onClick={() => toggleGroup(g.key)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${g.header}`}
+              >
+                {g.icon}
+                <span className="text-[12.5px] font-semibold">{g.label}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${g.badge}`}>{g.items.length}</span>
+                <ChevronDownIcon className={`h-4 w-4 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isOpen && (
+                <div className="flex flex-col gap-2 p-3 bg-white">
+                  {g.items.map((v, i) => (
+                    <ValidationCard key={`${v.rule_id}-${i}`} validation={v} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ValidationCard({ validation }: { validation: PGValidation | ContractValidation }) {
   const [expanded, setExpanded] = useState(false);
   const def = validation.rule_definition;
@@ -1597,5 +2053,1030 @@ function ExceptionCard({ exception }: { exception: ExtractionException }) {
         {exception.description}
       </div>
     </div>
+  );
+}
+
+const FIELD_LABEL_OVERRIDES: Record<string, string> = {
+  pg_metric_name: 'PG Metric Name',
+  metric_master_match: 'Metric Master Match',
+  non_standard_patterns: 'Non-Standard Patterns',
+  volume_threshold_type: 'Volume Threshold Type',
+  volume_comparison_operator: 'Volume Comparison Operator',
+  volume_exception_notes: 'Volume Exception Notes',
+};
+
+// Converts raw backend field names (e.g. "threshold_value") into a readable label ("Threshold Value").
+function formatFieldLabel(field: string): string {
+  if (FIELD_LABEL_OVERRIDES[field]) return FIELD_LABEL_OVERRIDES[field];
+  return field
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function PGReviewDrawer({
+  open,
+  onClose,
+  pg,
+  resolveReviewId,
+  onDecision,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pg: PerformanceGuarantee | null;
+  resolveReviewId: (pg: PerformanceGuarantee) => Promise<string | null>;
+  onDecision: (pg: PerformanceGuarantee, action: ReviewAction, comments: string) => Promise<PerformanceGuarantee | null>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ReviewItemDetail | null>(null);
+  const [comments, setComments] = useState('');
+  const [submittingAction, setSubmittingAction] = useState<ReviewAction | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  // Which version's edits the "Fields Edited" section is showing; null = default (latest edited version).
+  const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+  // Which edited-field badge is expanded to show its old -> new values.
+  const [expandedField, setExpandedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !pg) {
+      setDetail(null);
+      setError(null);
+      setComments('');
+      setSelectedVersion(null);
+      setExpandedField(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      setDetail(null);
+      try {
+        const reviewId = await resolveReviewId(pg);
+        if (!reviewId) {
+          if (!cancelled) setError('No pending review found for this PG.');
+          return;
+        }
+        const result = await getReviewItem(reviewId);
+        if (!cancelled) setDetail(result);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load review details');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pg?.pg_record_id]);
+
+  const handleDecision = async (action: ReviewAction) => {
+    if (!pg) return;
+    setSubmittingAction(action);
+    const updated = await onDecision(pg, action, comments);
+    setSubmittingAction(null);
+    if (updated) onClose();
+  };
+
+  // analyst_edits keys use API request names; snapshots sometimes use DB column names.
+  const SNAPSHOT_KEY_ALIASES: Record<string, string[]> = {
+    penalty_allocation_percentage: ['penalty_allocation_pct'],
+    minimum_volume_threshold: ['min_volume_threshold'],
+    minimum_volume_fallback: ['min_volume_fallback'],
+  };
+  const readSnapshotValue = (snapshot: any, field: string): unknown => {
+    if (!snapshot) return undefined;
+    if (field in snapshot) return snapshot[field];
+    for (const alias of SNAPSHOT_KEY_ALIASES[field] ?? []) {
+      if (alias in snapshot) return snapshot[alias];
+    }
+    return undefined;
+  };
+  // edit_reason / comments are decision metadata, not PG fields — excluded from the diff.
+  const META_EDIT_KEYS = new Set(['edit_reason', 'comments']);
+  const formatValue = (v: unknown): string => {
+    if (v === null || v === undefined || v === '') return '—';
+    if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  };
+  // Numeric strings like "95.0000" vs 95 must compare equal.
+  const normalize = (v: unknown): string => {
+    if (v === null || v === undefined || v === '') return '';
+    const n = Number(v);
+    if (typeof v !== 'object' && v !== '' && !Number.isNaN(n)) return String(n);
+    return formatValue(v);
+  };
+
+  type FieldChange = { field: string; before: unknown; after: unknown };
+  // Real per-version diff: compare each recorded analyst_edits key against the previous
+  // version's snapshot and keep only keys whose value actually changed. Older reviews
+  // recorded every editor field (even untouched ones), so analyst_edits alone over-reports.
+  const computeChanges = (v: PGHistoryItem): FieldChange[] => {
+    const edits: Record<string, unknown> = v.pg_snapshot?.analyst_edits ?? {};
+    const prev = detail?.versionHistory?.find((h) => h.version_number === v.version_number - 1);
+    return Object.keys(edits)
+      .filter((k) => !META_EDIT_KEYS.has(k))
+      .map((field) => ({
+        field,
+        before: readSnapshotValue(prev?.pg_snapshot, field),
+        after: readSnapshotValue(v.pg_snapshot, field) ?? edits[field],
+      }))
+      .filter((c) => !prev || normalize(c.before) !== normalize(c.after));
+  };
+  const changesByVersion = new Map<number, FieldChange[]>();
+  for (const v of detail?.versionHistory ?? []) changesByVersion.set(v.version_number, computeChanges(v));
+
+  const versionsWithEdits = (detail?.versionHistory ?? []).filter(
+    (v) => (changesByVersion.get(v.version_number)?.length ?? 0) > 0,
+  );
+  const latestEditedVersion = versionsWithEdits.reduce<PGHistoryItem | null>(
+    (best, v) => (!best || v.version_number > best.version_number ? v : best),
+    null,
+  );
+  const activeVersion = selectedVersion != null
+    ? detail?.versionHistory?.find((v) => v.version_number === selectedVersion) ?? null
+    : latestEditedVersion;
+  const activeChanges = activeVersion ? changesByVersion.get(activeVersion.version_number) ?? [] : [];
+  const activeEditReason: string | null = activeVersion?.pg_snapshot?.analyst_edits?.edit_reason ?? null;
+
+  const selectVersion = (versionNumber: number) => {
+    setSelectedVersion((prev) => (prev === versionNumber ? null : versionNumber));
+    setExpandedField(null);
+  };
+
+  return (
+    <Drawer open={open} onClose={onClose} title={pg ? `Review · ${pg.pg_id}` : 'Review'} width="w-[560px]">
+      {!pg ? null : loading ? (
+        <div className="flex items-center justify-center py-16">
+          <img src="/NylLogo.svg" alt="NYL Logo" className="h-8 w-8 animate-spin-y" />
+        </div>
+      ) : error ? (
+        <div className="m-4 rounded border border-red-200 bg-red-50 px-3 py-2.5 text-[12.5px] text-red-800">
+          {error}
+        </div>
+      ) : (
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="shrink-0 flex flex-col gap-3 px-4 pt-4">
+            <div>
+              <div className="text-[13px] font-semibold text-navy-800">
+                {pg.pg_sub_category || pg.pg_metric_name || pg.pg_id}
+              </div>
+              <div className="mt-0.5 text-[11.5px] text-gray-500">{pg.pg_category}</div>
+            </div>
+
+            {detail?.priorityExplanation && (
+              <div className="flex items-start gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2">
+                <InfoIcon className="h-4 w-4 mt-0.5 shrink-0 text-blue-700" />
+                <div className="text-[12px] text-blue-900 leading-relaxed">{detail.priorityExplanation}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 px-4 py-3">
+          {activeVersion && activeChanges.length > 0 && (
+            <div className="flex flex-col rounded-lg border border-amber-200 overflow-hidden">
+              <div className="shrink-0 flex items-center gap-2 bg-amber-50 px-3 py-2 border-b border-amber-200">
+                <span className="text-[11px] font-semibold text-amber-900 uppercase tracking-wide">Fields Edited by Analyst</span>
+                <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold text-white">v{activeVersion.version_number}</span>
+                <span className="ml-auto text-[11px] text-amber-800">{activeChanges.length} change{activeChanges.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {activeChanges.map((c) => {
+                  const isExpanded = expandedField === c.field;
+                  const before = formatValue(c.before);
+                  const after = formatValue(c.after);
+                  return (
+                    <button
+                      key={c.field}
+                      type="button"
+                      onClick={() => setExpandedField((prev) => (prev === c.field ? null : c.field))}
+                      className="w-full text-left px-3 py-2 transition-colors hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-semibold text-navy-800">{formatFieldLabel(c.field)}</span>
+                        <ChevronDownIcon className={`h-3.5 w-3.5 ml-auto text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </div>
+                      {isExpanded ? (
+                        <div className="mt-1.5 grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 text-[12px]">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-red-600 pt-0.5">Before</span>
+                          <span className="rounded bg-red-50 px-2 py-1 text-red-900 whitespace-pre-wrap break-words">{before}</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-green-700 pt-0.5">After</span>
+                          <span className="rounded bg-green-50 px-2 py-1 font-medium text-green-900 whitespace-pre-wrap break-words">{after}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11.5px] text-gray-500 min-w-0">
+                          <span className="truncate max-w-[45%] text-red-800/80 line-through">{before}</span>
+                          <span className="shrink-0">→</span>
+                          <span className="truncate text-green-800 font-medium">{after}</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {activeEditReason && (
+                <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-3 py-2 text-[11.5px] text-gray-700">
+                  <span className="font-semibold text-gray-600">Reason: </span>{activeEditReason}
+                </div>
+              )}
+            </div>
+          )}
+
+          {detail?.versionHistory && detail.versionHistory.length > 0 && (
+            <div className="flex flex-col rounded border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((v) => !v)}
+                className="shrink-0 w-full flex items-center gap-2 bg-navy-50 px-3 py-2 text-left transition-colors hover:bg-navy-100"
+              >
+                <HistoryIcon className="h-3.5 w-3.5 text-navy-700" />
+                <span className="text-[11.5px] font-semibold text-navy-800">Version History ({detail.versionHistory.length})</span>
+                <ChevronDownIcon className={`h-3.5 w-3.5 ml-auto text-navy-700 transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {historyOpen && (
+                <div className="flex flex-col divide-y divide-gray-100">
+                  {detail.versionHistory.map((v) => {
+                    const changeCount = changesByVersion.get(v.version_number)?.length ?? 0;
+                    const hasEdits = changeCount > 0;
+                    const isActive = activeVersion?.version_id === v.version_id;
+                    return (
+                      <div
+                        key={v.version_id}
+                        role={hasEdits ? 'button' : undefined}
+                        tabIndex={hasEdits ? 0 : undefined}
+                        onClick={hasEdits ? () => selectVersion(v.version_number) : undefined}
+                        onKeyDown={hasEdits ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectVersion(v.version_number); } } : undefined}
+                        title={hasEdits ? 'Show fields changed in this version' : undefined}
+                        className={`px-3 py-2 border-l-2 transition-colors ${
+                          isActive ? 'border-amber-500 bg-amber-50/60' : 'border-transparent'
+                        } ${hasEdits ? 'cursor-pointer hover:bg-amber-50/40' : ''}`}
+                      >
+                        <div className="flex items-center gap-2 text-[11.5px]">
+                          <span className="font-semibold text-navy-800">v{v.version_number}</span>
+                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{formatFieldLabel(v.change_action)}</span>
+                          {hasEdits && (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isActive ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                              {changeCount} change{changeCount === 1 ? '' : 's'}
+                            </span>
+                          )}
+                          <span className="ml-auto flex items-center gap-1 text-gray-500 whitespace-nowrap">
+                            <ClockIcon className="h-3 w-3" />
+                            {new Date(v.changed_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-500">
+                          <UserIcon className="h-3 w-3" />
+                          {v.changed_by}
+                        </div>
+                        {v.change_reason && (
+                          <div className="mt-1 text-[11.5px] text-gray-700">{v.change_reason}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-4 py-3">
+          <FormField label="Comments">
+            <textarea
+              rows={2}
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="Reviewer comment for this decision"
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 resize-none"
+            />
+          </FormField>
+
+          {/* Backend /decision endpoint only accepts action=APPROVE; corrections go through
+              editedFields on approve (PG editor), so REJECT/REQUEST_CHANGES are not offered. */}
+          <button
+            type="button"
+            onClick={() => handleDecision('APPROVE')}
+            disabled={submittingAction !== null}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded bg-green-700 px-3 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CheckCheckIcon className="h-3.5 w-3.5" />
+            {submittingAction === 'APPROVE' ? 'Approving…' : 'Approve'}
+          </button>
+          </div>
+        </div>
+      )}
+    </Drawer>
+  );
+}
+
+// Confirmed valid enum values from the backend's PolicyCreate/PolicyUpdate validation error.
+const STATUS_OPTIONS = ['ACTIVE', 'RENEWED', 'CANCELLED', 'UNKNOWN'];
+const PRODUCT_LINE_OPTIONS = ['STD', 'LTD', 'FMLA', 'LIFE', 'VB', 'AD&D'];
+
+function AddPolicyDialog({
+  open,
+  onClose,
+  contractId,
+  brokerClientOptions,
+  defaultBroker,
+  defaultClientName,
+  onCreated,
+  onError,
+}: {
+  open: boolean;
+  onClose: () => void;
+  contractId: string;
+  brokerClientOptions: { broker: string; clients: string[] }[];
+  defaultBroker: string;
+  defaultClientName: string;
+  onCreated: (policyNumber: string) => void;
+  onError: (message: string) => void;
+}) {
+  // The contract's own broker/client can be blank/null; fall back to the first
+  // known broker/client pair so the select never sits on an unmatched value.
+  const resolveDefaults = () => {
+    const broker = defaultBroker || brokerClientOptions[0]?.broker || '';
+    const clients = brokerClientOptions.find((o) => o.broker === broker)?.clients ?? [];
+    const client = defaultClientName && clients.includes(defaultClientName) ? defaultClientName : (clients[0] ?? defaultClientName ?? '');
+    return { broker, client };
+  };
+
+  const emptyForm = {
+    broker_producer: resolveDefaults().broker,
+    client_name: resolveDefaults().client,
+    policy_number: '',
+    product_line: '',
+    effective_date: '',
+    end_date: '',
+    status: 'ACTIVE',
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const { broker, client } = resolveDefaults();
+      setForm({ ...emptyForm, broker_producer: broker, client_name: client });
+      setSubmitError(null);
+      setAttemptedSubmit(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const clientOptionsForBroker = Array.from(new Set(
+    [
+      ...(brokerClientOptions.find((o) => o.broker === form.broker_producer)?.clients ?? [defaultClientName]),
+      form.client_name,
+    ].filter(Boolean),
+  ));
+
+  const setField = (name: keyof typeof form, value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'broker_producer') {
+        const clients = brokerClientOptions.find((o) => o.broker === value)?.clients ?? [defaultClientName];
+        if (!clients.includes(prev.client_name)) next.client_name = clients[0] ?? '';
+      }
+      return next;
+    });
+  };
+
+  const requiredFieldChecks: [string, boolean][] = [
+    ['Broker / Producer', form.broker_producer.trim() !== ''],
+    ['Client Name', form.client_name.trim() !== ''],
+    ['Policy Number', form.policy_number.trim() !== ''],
+    ['Effective Date', form.effective_date !== ''],
+    ['End Date', form.end_date !== ''],
+  ];
+  const missingFields = requiredFieldChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  const isValid = missingFields.length === 0;
+  const fieldError = (label: string) => (attemptedSubmit && missingFields.includes(label) ? 'Required' : undefined);
+
+  const handleSubmit = async () => {
+    if (!isValid || saving) {
+      if (!isValid) setAttemptedSubmit(true);
+      return;
+    }
+    setSaving(true);
+    setSubmitError(null);
+    try {
+      const payload: CreatePolicyPayload = {
+        broker_producer: form.broker_producer.trim(),
+        client_name: form.client_name.trim(),
+        policy_number: form.policy_number.trim(),
+        product_line: form.product_line || null,
+        effective_date: form.effective_date,
+        end_date: form.end_date,
+        status: form.status,
+      };
+      const created = await createPolicy(contractId, payload);
+      onCreated(created.policy_number);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create policy';
+      setSubmitError(message);
+      onError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Drawer open={open} onClose={onClose} title="Add Policy" width="w-[460px]">
+      <div className="flex flex-col gap-3 p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Broker / Producer" error={fieldError('Broker / Producer')}>
+            <select
+              value={form.broker_producer}
+              onChange={(e) => setField('broker_producer', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Broker / Producer') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              {brokerClientOptions.map((o) => (
+                <option key={o.broker} value={o.broker}>{o.broker || 'Unknown'}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Client Name" error={fieldError('Client Name')}>
+            <select
+              value={form.client_name}
+              onChange={(e) => setField('client_name', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Client Name') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              {clientOptionsForBroker.map((c) => (
+                <option key={c} value={c}>{c || 'Unknown'}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Policy Number" error={fieldError('Policy Number')}>
+            <input
+              type="text"
+              value={form.policy_number}
+              onChange={(e) => setField('policy_number', e.target.value.toUpperCase())}
+              placeholder="e.g. FLK0980306"
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] font-mono text-gray-800 outline-none focus:border-navy-700 ${fieldError('Policy Number') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+          <FormField label="Product Line">
+            <select
+              value={form.product_line}
+              onChange={(e) => setField('product_line', e.target.value)}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700"
+            >
+              <option value="">Select…</option>
+              {PRODUCT_LINE_OPTIONS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Effective Date" error={fieldError('Effective Date')}>
+            <input
+              type="date"
+              value={form.effective_date}
+              onChange={(e) => setField('effective_date', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Effective Date') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+          <FormField label="End Date" error={fieldError('End Date')}>
+            <input
+              type="date"
+              value={form.end_date}
+              onChange={(e) => setField('end_date', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('End Date') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+          <FormField label="Status">
+            <select
+              value={form.status}
+              onChange={(e) => setField('status', e.target.value)}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700"
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        {submitError && (
+          <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-900">
+            <span className="font-semibold">Could not create policy: </span>
+            {submitError}
+          </div>
+        )}
+
+        <div className="mt-2 flex items-center justify-end gap-2 border-t border-gray-200 pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            title={!isValid ? `Missing: ${missingFields.join(', ')}` : undefined}
+            className="inline-flex items-center gap-1.5 rounded bg-navy-700 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <SaveIcon className="h-3.5 w-3.5" />
+            {saving ? 'Creating…' : 'Create Policy'}
+          </button>
+        </div>
+      </div>
+    </Drawer>
+  );
+}
+
+const PG_CATEGORY_OPTIONS = ['AVAILABILITY', 'FINANCIAL_ACCURACY', 'CLAIMS_PROCESSING', 'CUSTOMER_SERVICE', 'TIMELINESS', 'ACCURACY', 'QUALITY', 'OTHER'];
+// Confirmed via backend PGCreate validation error response (not guessed):
+const THRESHOLD_UNIT_OPTIONS = ['PERCENTAGE', 'DAYS_CALENDAR', 'DAYS_BUSINESS', 'SECONDS', 'SCORE', 'DOLLAR', 'COUNTS', 'OTHER'];
+const THRESHOLD_DIRECTION_OPTIONS = ['MINIMUM', 'MAXIMUM', 'EXACT', 'RANGE'];
+const BASIS_OF_MEASUREMENT_OPTIONS = ['CLIENT_SPECIFIC', 'BOOK_OF_BUSINESS', 'CENTER_LEVEL', 'ENHANCED_NETWORK', 'INTERNAL_REVIEW', 'WORKFLOW_TOOL', 'STANDARD_SURVEY', 'OTHER'];
+const EVALUATION_PERIOD_OPTIONS = ['MONTHLY', 'QUARTERLY', 'ANNUAL', 'ONE_TIME', 'OTHER'];
+const PENALTY_TYPE_OPTIONS = ['PERCENTAGE_OF_POOL', 'FLAT_DOLLAR', 'CREDIT', 'EARNBACK', 'HYBRID', 'PRODUCT_BASED', 'COMPONENT_WEIGHTED'];
+const CLASSIFICATION_OPTIONS = ['STANDARD', 'NON_STANDARD', 'CUSTOM_NEW'];
+
+function AddPGDialog({
+  open,
+  onClose,
+  contractId,
+  policyOptions,
+  brokerClientOptions,
+  defaultBroker,
+  defaultClientName,
+  onCreated,
+  onError,
+}: {
+  open: boolean;
+  onClose: () => void;
+  contractId: string;
+  policyOptions: { policy_number: string; product_line: string | null }[];
+  brokerClientOptions: { broker: string; clients: string[] }[];
+  defaultBroker: string;
+  defaultClientName: string;
+  onCreated: (policyNumber: string, pgId: string) => void;
+  onError: (message: string) => void;
+}) {
+  // The contract's own broker/client can be blank/null; fall back to the first
+  // known broker/client pair so the select never sits on an unmatched value.
+  const resolveDefaults = () => {
+    const broker = defaultBroker || brokerClientOptions[0]?.broker || '';
+    const clients = brokerClientOptions.find((o) => o.broker === broker)?.clients ?? [];
+    const client = defaultClientName && clients.includes(defaultClientName) ? defaultClientName : (clients[0] ?? defaultClientName ?? '');
+    return { broker, client };
+  };
+
+  const emptyForm = {
+    broker_producer: resolveDefaults().broker,
+    client_name: resolveDefaults().client,
+    policy_number: '',
+    pg_category: '',
+    pg_sub_category: '',
+    pg_metric_name: '',
+    department: '',
+    operational_area: '',
+    product_line: '' as string,
+    performance_standard_text: '',
+    threshold_value: '',
+    threshold_unit: '',
+    threshold_direction: '',
+    threshold_qualifier: '',
+    basis_of_measurement: '',
+    evaluation_method_text: '',
+    evaluation_period: '',
+    reporting_cadence: '',
+    penalty_cadence: '',
+    penalty_type: '',
+    penalty_allocation_percentage: '',
+    penalty_dollar_amount: '',
+    metric_owner: '',
+    source_system: '',
+    results_source: '',
+    classification: '',
+    classification_reason: '',
+    notes: '',
+    deviation_details: '',
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [validation, setValidation] = useState<PGValidationResult | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [creating, setCreating] = useState(false);
+  // Request-level failure (network error, 4xx/5xx from the API) — kept separate from
+  // `validation` (the structured pass/fail result the backend returns on a 200) so it
+  // stays visible in the dialog instead of just flashing a toast.
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const { broker, client } = resolveDefaults();
+      setForm({
+        ...emptyForm,
+        broker_producer: broker,
+        client_name: client,
+        policy_number: policyOptions[0]?.policy_number ?? '',
+      });
+      setValidation(null);
+      setRequestError(null);
+      setAttemptedSubmit(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const clientOptionsForBroker = Array.from(new Set(
+    [
+      ...(brokerClientOptions.find((o) => o.broker === form.broker_producer)?.clients ?? [defaultClientName]),
+      form.client_name,
+    ].filter(Boolean),
+  ));
+
+  const productLineOptions = Array.from(
+    new Set([
+      ...policyOptions.map((p) => p.product_line).filter((p): p is string => !!p),
+      ...PRODUCT_LINE_OPTIONS,
+    ]),
+  );
+
+  const setField = (name: keyof typeof form, value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'broker_producer') {
+        const clients = brokerClientOptions.find((o) => o.broker === value)?.clients ?? [defaultClientName];
+        if (!clients.includes(prev.client_name)) next.client_name = clients[0] ?? '';
+      }
+      if (name === 'policy_number') {
+        const matched = policyOptions.find((p) => p.policy_number === value);
+        if (matched?.product_line) next.product_line = matched.product_line;
+      }
+      return next;
+    });
+    setValidation(null);
+    setRequestError(null);
+  };
+
+  // threshold_unit, basis_of_measurement, evaluation_period, evaluation_method_text and
+  // penalty_type are all confirmed required (non-nullable) by the backend's PGCreate model —
+  // each has shown up by name in its 422 validation errors — so all are gated here.
+  const requiredFieldChecks: [string, boolean][] = [
+    ['Broker / Producer', form.broker_producer.trim() !== ''],
+    ['Client Name', form.client_name.trim() !== ''],
+    ['Policy Number', form.policy_number.trim() !== ''],
+    ['PG Category', form.pg_category.trim() !== ''],
+    ['PG Sub-Category', form.pg_sub_category.trim() !== ''],
+    ['PG Metric Name', form.pg_metric_name.trim() !== ''],
+    ['Product Line', form.product_line.trim() !== ''],
+    ['Performance Standard Text', form.performance_standard_text.trim() !== ''],
+    ['Threshold Unit', form.threshold_unit !== ''],
+    ['Threshold Direction', form.threshold_direction !== ''],
+    ['Basis of Measurement', form.basis_of_measurement !== ''],
+    ['Evaluation Period', form.evaluation_period !== ''],
+    ['Evaluation Method Text', form.evaluation_method_text.trim() !== ''],
+    ['Penalty Type', form.penalty_type !== ''],
+    ['Classification', form.classification !== ''],
+  ];
+  const missingFields = requiredFieldChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  const hasRequiredFields = missingFields.length === 0;
+  const fieldError = (label: string) => (attemptedSubmit && missingFields.includes(label) ? 'Required' : undefined);
+
+  const buildPayload = (): ManualPGPayload => ({
+    broker_producer: form.broker_producer,
+    client_name: form.client_name,
+    pg_category: form.pg_category,
+    pg_sub_category: form.pg_sub_category,
+    product_line: form.product_line ? [form.product_line] : [],
+    performance_standard_text: form.performance_standard_text,
+    threshold_value: form.threshold_value === '' ? null : Number(form.threshold_value),
+    threshold_unit: form.threshold_unit || null,
+    threshold_direction: form.threshold_direction || null,
+    threshold_qualifier: form.threshold_qualifier || null,
+    basis_of_measurement: form.basis_of_measurement || null,
+    evaluation_method_text: form.evaluation_method_text || null,
+    evaluation_period: form.evaluation_period || null,
+    reporting_cadence: form.reporting_cadence || null,
+    penalty_cadence: form.penalty_cadence || null,
+    penalty_allocation_percentage: form.penalty_allocation_percentage === '' ? null : Number(form.penalty_allocation_percentage),
+    penalty_type: form.penalty_type || null,
+    penalty_dollar_amount: form.penalty_dollar_amount === '' ? null : Number(form.penalty_dollar_amount),
+    penalty_tier_structure: null,
+    minimum_volume_threshold: null,
+    minimum_volume_fallback: null,
+    volume_threshold_type: null,
+    volume_comparison_operator: null,
+    volume_exception_notes: null,
+    pg_metric_name: form.pg_metric_name,
+    department: form.department || null,
+    operational_area: form.operational_area || null,
+    metric_owner: form.metric_owner || null,
+    source_system: form.source_system || null,
+    results_source: form.results_source || null,
+    metric_amount_at_risk: null,
+    third_party_references: [],
+    amendment_flag: false,
+    notes: form.notes || null,
+    policy_number: form.policy_number,
+    classification: form.classification,
+    classification_reason: form.classification_reason || null,
+    deviation_details: form.deviation_details || null,
+  });
+
+  const handleValidate = async () => {
+    if (validating) return;
+    if (!hasRequiredFields) {
+      setAttemptedSubmit(true);
+      return;
+    }
+    setValidating(true);
+    setValidation(null);
+    setRequestError(null);
+    try {
+      const result = await validatePG(contractId, buildPayload());
+      setValidation(result);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : 'Could not reach the server. Check your connection and try again.');
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!validation?.valid || creating) return;
+    setCreating(true);
+    setRequestError(null);
+    try {
+      const created = await createPG(contractId, buildPayload());
+      onCreated(form.policy_number, created.pg_id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create PG. Please try again.';
+      setRequestError(message);
+      onError(message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Drawer open={open} onClose={onClose} title="Add Performance Guarantee" width="w-[640px]">
+      <div className="flex flex-col gap-4 p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Broker / Producer" error={fieldError('Broker / Producer')}>
+            <select
+              value={form.broker_producer}
+              onChange={(e) => setField('broker_producer', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Broker / Producer') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              {brokerClientOptions.map((o) => (
+                <option key={o.broker} value={o.broker}>{o.broker || 'Unknown'}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Client Name" error={fieldError('Client Name')}>
+            <select
+              value={form.client_name}
+              onChange={(e) => setField('client_name', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Client Name') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              {clientOptionsForBroker.map((c) => (
+                <option key={c} value={c}>{c || 'Unknown'}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Policy Number" error={fieldError('Policy Number')}>
+            <select
+              value={form.policy_number}
+              onChange={(e) => setField('policy_number', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] font-mono text-gray-800 outline-none focus:border-navy-700 ${fieldError('Policy Number') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {policyOptions.map((p) => (
+                <option key={p.policy_number} value={p.policy_number}>{p.policy_number}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Product Line" error={fieldError('Product Line')}>
+            <select
+              value={form.product_line}
+              onChange={(e) => setField('product_line', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Product Line') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {productLineOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="PG Category" error={fieldError('PG Category')}>
+            <select
+              value={form.pg_category}
+              onChange={(e) => setField('pg_category', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('PG Category') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {PG_CATEGORY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="PG Sub-Category" error={fieldError('PG Sub-Category')}>
+            <input
+              type="text"
+              value={form.pg_sub_category}
+              onChange={(e) => setField('pg_sub_category', e.target.value)}
+              placeholder="e.g. Service Uptime"
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('PG Sub-Category') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+          <FormField label="PG Metric Name" error={fieldError('PG Metric Name')}>
+            <input
+              type="text"
+              value={form.pg_metric_name}
+              onChange={(e) => setField('pg_metric_name', e.target.value)}
+              placeholder="e.g. Service Uptime Percentage"
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('PG Metric Name') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+
+          <FormField label="Performance Standard Text" className="col-span-2" error={fieldError('Performance Standard Text')}>
+            <textarea
+              rows={2}
+              value={form.performance_standard_text}
+              onChange={(e) => setField('performance_standard_text', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 resize-y ${fieldError('Performance Standard Text') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+
+          <FormField label="Threshold Direction" error={fieldError('Threshold Direction')}>
+            <select
+              value={form.threshold_direction}
+              onChange={(e) => setField('threshold_direction', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Threshold Direction') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {THRESHOLD_DIRECTION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Threshold Value">
+            <input
+              type="number"
+              step="0.01"
+              value={form.threshold_value}
+              onChange={(e) => setField('threshold_value', e.target.value)}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700"
+            />
+          </FormField>
+          <FormField label="Threshold Unit" error={fieldError('Threshold Unit')}>
+            <select
+              value={form.threshold_unit}
+              onChange={(e) => setField('threshold_unit', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Threshold Unit') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {THRESHOLD_UNIT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Basis of Measurement" error={fieldError('Basis of Measurement')}>
+            <select
+              value={form.basis_of_measurement}
+              onChange={(e) => setField('basis_of_measurement', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Basis of Measurement') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {BASIS_OF_MEASUREMENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Evaluation Period" error={fieldError('Evaluation Period')}>
+            <select
+              value={form.evaluation_period}
+              onChange={(e) => setField('evaluation_period', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Evaluation Period') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {EVALUATION_PERIOD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Penalty Type" error={fieldError('Penalty Type')}>
+            <select
+              value={form.penalty_type}
+              onChange={(e) => setField('penalty_type', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Penalty Type') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {PENALTY_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Penalty Allocation %">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={form.penalty_allocation_percentage}
+              onChange={(e) => setField('penalty_allocation_percentage', e.target.value)}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700"
+            />
+          </FormField>
+
+          <FormField label="Evaluation Method Text" className="col-span-2" error={fieldError('Evaluation Method Text')}>
+            <textarea
+              rows={2}
+              value={form.evaluation_method_text}
+              onChange={(e) => setField('evaluation_method_text', e.target.value)}
+              placeholder="e.g. Measured monthly using infrastructure monitoring reports."
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 resize-y ${fieldError('Evaluation Method Text') ? 'border-red-400' : 'border-gray-300'}`}
+            />
+          </FormField>
+
+          <FormField label="Classification" error={fieldError('Classification')}>
+            <select
+              value={form.classification}
+              onChange={(e) => setField('classification', e.target.value)}
+              className={`w-full rounded border bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 ${fieldError('Classification') ? 'border-red-400' : 'border-gray-300'}`}
+            >
+              <option value="">Select…</option>
+              {CLASSIFICATION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Classification Reason" className="col-span-2">
+            <input
+              type="text"
+              value={form.classification_reason}
+              onChange={(e) => setField('classification_reason', e.target.value)}
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700"
+            />
+          </FormField>
+
+          <FormField label="Notes" className="col-span-2">
+            <textarea
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setField('notes', e.target.value)}
+              placeholder="Manual PG created through UI"
+              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-[12.5px] text-gray-800 outline-none focus:border-navy-700 resize-y"
+            />
+          </FormField>
+        </div>
+
+        {requestError && (
+          <div className="flex items-start gap-2 rounded border border-red-300 bg-red-50 px-3 py-2.5">
+            <XCircleIcon className="h-4 w-4 mt-0.5 shrink-0 text-red-700" />
+            <div>
+              <div className="text-[12.5px] font-semibold text-red-800">Couldn't validate this PG</div>
+              <div className="mt-0.5 text-[12px] text-red-800 leading-relaxed">{requestError}</div>
+            </div>
+          </div>
+        )}
+
+        {validation && (
+          <div className={`rounded border px-3 py-2.5 ${validation.valid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+            <div className={`flex items-center gap-1.5 text-[12.5px] font-semibold ${validation.valid ? 'text-green-800' : 'text-red-800'}`}>
+              {validation.valid ? <ShieldCheckIcon className="h-4 w-4" /> : <XCircleIcon className="h-4 w-4" />}
+              {validation.valid ? 'Validation passed' : 'Validation failed'}
+            </div>
+            {validation.errors.length > 0 && (
+              <ul className="mt-1.5 list-disc pl-5 text-[12px] text-red-800">
+                {validation.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            )}
+            {validation.warnings.length > 0 && (
+              <ul className="mt-1.5 list-disc pl-5 text-[12px] text-amber-800">
+                {validation.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={creating}
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleValidate}
+            disabled={validating}
+            title={!hasRequiredFields ? `Missing: ${missingFields.join(', ')}` : undefined}
+            className="inline-flex items-center gap-1.5 rounded border border-navy-700 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-navy-700 transition-colors hover:bg-navy-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ShieldCheckIcon className="h-3.5 w-3.5" />
+            {validating ? 'Validating…' : 'Validate'}
+          </button>
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={!validation?.valid || creating}
+            title={!validation?.valid ? 'Run Validate successfully before creating' : undefined}
+            className="inline-flex items-center gap-1.5 rounded bg-navy-700 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <SaveIcon className="h-3.5 w-3.5" />
+            {creating ? 'Creating…' : 'Create PG'}
+          </button>
+        </div>
+      </div>
+    </Drawer>
   );
 }

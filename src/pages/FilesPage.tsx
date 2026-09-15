@@ -9,27 +9,9 @@ import { mapContractToUploadedFile } from '../services/mappers';
 import { Toast, ToastType } from '../components/ui/Toast';
 import { Dialog } from '../components/ui/Dialog';
 
-type TabKey = 'all' | 'pendingReview' | 'approved' | 'failed';
-
-const tabs: {key: TabKey;label: string;}[] = [
-{ key: 'all', label: 'All' },
-{ key: 'pendingReview', label: 'Pending Review' },
-{ key: 'approved', label: 'Approved' },
-{ key: 'failed', label: 'Failed' }];
-
-
-function matchesTab(file: UploadedFile, tab: TabKey) {
-  if (tab === 'all') return true;
-  if (tab === 'pendingReview') return file.status === 'Processing' || file.status === 'Processed';
-  if (tab === 'approved') return file.status === 'Completed';
-  if (tab === 'failed') return file.status === 'Failed';
-  return false;
-}
-
 export function FilesPage() {
   const navigate = useNavigate();
   const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [tab, setTab] = useState<TabKey>('all');
   const [query, setQuery] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,25 +60,14 @@ export function FilesPage() {
     }
   };
 
-  const counts = useMemo(() => {
-    return {
-      all: files.length,
-      pendingReview: files.filter((f) => f.status === 'Processing' || f.status === 'Processed').length,
-      approved: files.filter((f) => f.status === 'Completed').length,
-      failed: files.filter((f) => f.status === 'Failed').length
-    };
-  }, [files]);
-
   const visibleFiles = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (!q) return files;
     return files.filter((file) => {
-      const inTab = matchesTab(file, tab);
-      if (!inTab) return false;
-      if (!q) return true;
       const haystack = [file.clientName, ...file.policies, file.status].join(' ').toLowerCase();
       return haystack.includes(q);
     });
-  }, [files, tab, query]);
+  }, [files, query]);
 
   const handleUpload = async (uploadFiles: File[]) => {
     setUploadError(null);
@@ -211,8 +182,8 @@ export function FilesPage() {
       <UploadPanel onFilesSelected={handleUpload} />
 
       <section className="overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-3 py-2.5">
-          <label className="relative w-[300px]">
+        <div className="flex flex-nowrap items-center gap-3 border-b border-gray-100 px-3 py-2.5">
+          <label className="relative w-[300px] shrink-0">
             <span className="sr-only">Search contracts</span>
             <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
             <input
@@ -223,51 +194,14 @@ export function FilesPage() {
             
           </label>
 
-          <div className="ml-auto flex items-center gap-2" role="tablist" aria-label="Filter contracts by status">
-            {tabs.map((t) => {
-              const active = tab === t.key;
-              const count = counts[t.key];
-              
-              let colorClasses = '';
-              if (t.key === 'all') {
-                colorClasses = active 
-                  ? 'bg-navy-700 text-white border-navy-700'
-                  : 'bg-navy-50 text-navy-700 border-navy-200 hover:bg-navy-100';
-              } else if (t.key === 'pendingReview') {
-                colorClasses = active
-                  ? 'bg-amber-500 text-white border-amber-500'
-                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100';
-              } else if (t.key === 'approved') {
-                colorClasses = active
-                  ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100';
-              } else if (t.key === 'failed') {
-                colorClasses = active
-                  ? 'bg-red-600 text-white border-red-600'
-                  : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100';
-              }
-              
-              return (
-                <button
-                  key={t.key}
-                  role="tab"
-                  aria-selected={active}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`rounded border px-3 py-1.5 text-[13px] font-medium transition-all duration-150 ease-out ${colorClasses}`}>
-                  {t.label} <span className={active ? 'font-bold' : 'font-semibold'}>({count})</span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={handleRefresh}
-              aria-label="Refresh file list"
-              className="ml-1 rounded bg-navy-700 p-1.5 text-white transition-colors duration-150 ease-out hover:bg-navy-800">
-              
-              <RefreshCwIcon className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            aria-label="Refresh file list"
+            className="ml-auto rounded bg-navy-700 p-1.5 text-white transition-colors duration-150 ease-out hover:bg-navy-800">
+            
+            <RefreshCwIcon className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         {loading ? (

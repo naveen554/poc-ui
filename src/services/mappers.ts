@@ -3,41 +3,37 @@ import { FileDetail, FileStatus, UploadedFile, ValidationResult, ExtractedField 
 
 export function mapStatusToFileStatus(apiStatus: string | null): FileStatus {
   if (!apiStatus) return 'Processing';
-  
+
   const status = apiStatus.toUpperCase();
-  
+
   if (status === 'PROCESSING' || status === 'PENDING') {
     return 'Processing';
   }
-  
+
   if (status === 'PENDING_REVIEW') {
     return 'Pending Review';
   }
-  
+
+  if (status === 'IN_REVIEW') {
+    return 'In Review';
+  }
+
   if (status === 'PARTIALLY_REVIEWED') {
     return 'Partially Reviewed';
   }
-  
-  if (status === 'APPROVED') {
-    return 'Approved';
+
+  if (status === 'APPROVED_FOR_STORAGE') {
+    return 'Approved for Storage';
   }
-  
-  if (status === 'COMPLETED') {
-    return 'Completed';
+
+  if (status === 'BLOCKED_PENDING_ACTION') {
+    return 'Blocked - Pending Action';
   }
-  
-  if (status === 'REJECTED') {
-    return 'Rejected';
-  }
-  
+
   if (status === 'FAILED') {
     return 'Failed';
   }
-  
-  if (status === 'PROCESSED') {
-    return 'Processed';
-  }
-  
+
   return 'Processing';
 }
 

@@ -20,7 +20,7 @@ export function FilesTable({ files, onView, onDelete }: FilesTableProps) {
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[80px]">PGs</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[100px]">Completed</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[90px]">Pending</th>
-            <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[130px]">Status</th>
+            <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[170px]">Status</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[170px]">Uploaded</th>
             <th scope="col" className="whitespace-nowrap px-3 py-2 text-[12px] font-semibold uppercase tracking-wide w-[80px]">Actions</th>
           </tr>
@@ -65,7 +65,7 @@ export function FilesTable({ files, onView, onDelete }: FilesTableProps) {
                 <td className="px-3 py-3 text-[13px] font-semibold text-amber-600 w-[90px]">
                   {pendingDisplay}
                 </td>
-                <td className="px-3 py-3 w-[130px]">
+                <td className="px-3 py-3 w-[170px] whitespace-nowrap">
                   <StatusBadge status={file.status} />
                 </td>
                 <td className="px-3 py-3 w-[170px]">
